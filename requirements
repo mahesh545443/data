@@ -1,7 +1,7 @@
 streamlit
-pandas
-numpy
-openai
 groq
+reportlab
+Pillow
+pypdf
 
 
