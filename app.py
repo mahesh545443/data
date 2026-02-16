@@ -16,7 +16,8 @@ import io
 # ==========================================
 # API KEY - SET YOUR GROQ API KEY HERE
 # ==========================================
-GROQ_API_KEY = "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"  # ← PUT YOUR API KEY HERE
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+  
 
 # ==========================================
 # UNIFORM SPACING FOR ENTIRE PDF
@@ -723,4 +724,5 @@ if submit:
                             st.write(f"Generated {len(table_rows)} roles")
                             st.write(f"Domains: {domain_rowspan_map}")
                     else:
+
                         st.error(f"PDF Error: {error_msg}")
