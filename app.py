@@ -10,7 +10,7 @@ from reportlab.platypus import Paragraph, Table, TableStyle
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT
 from PIL import Image
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter, Transformation
 import io
 
 # ==========================================
@@ -198,7 +198,7 @@ def create_page1(c, name, status, ai_content):
     L = MARGINS['left']
     R = page_width - MARGINS['right']
     W = R - L
-    draw_outer_border(c, page_width, page_height)
+    # NO border drawn here — border comes from template overlay (same as page 3)
     header_space = draw_header_no_line(c, page_width, page_height)
     y = page_height - header_space - 15
 
@@ -253,7 +253,7 @@ def create_page1(c, name, status, ai_content):
 
 def create_page2(c, ai_content, table_rows, domain_rowspan_map):
     page_width, page_height = A4
-    draw_outer_border(c, page_width, page_height)
+    # NO border drawn here — border comes from template overlay (same as page 3)
     header_space = draw_header_no_line(c, page_width, page_height)
     L = MARGINS['left']; R = page_width - MARGINS['right']; W = R - L
     y = page_height - header_space - 15
@@ -333,6 +333,11 @@ def create_page2(c, ai_content, table_rows, domain_rowspan_map):
     c.drawString(L + (box_width - text_width) / 2, y - (box_height / 2) - 4, reveal_text)
 
 def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, output_path):
+    # ── Draw border canvas (A4 size) to overlay on pages 1 & 2 ──
+    # We take the border from template page 1 (same border as page 3)
+    # so all 3 pages have identical border style
+    template_path = "assets/template.pdf"
+
     buffer1 = io.BytesIO()
     c1 = canvas.Canvas(buffer1, pagesize=A4)
     create_page1(c1, name, status, ai_content); c1.save(); buffer1.seek(0)
@@ -341,22 +346,57 @@ def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, o
     c2 = canvas.Canvas(buffer2, pagesize=A4)
     create_page2(c2, ai_content, table_rows, domain_rowspan_map); c2.save(); buffer2.seek(0)
 
-    buffer3 = io.BytesIO()
-    c3 = canvas.Canvas(buffer3, pagesize=A4)
-    draw_outer_border(c3, A4[0], A4[1]); c3.save(); buffer3.seek(0)
-
     writer = PdfWriter()
-    writer.add_page(PdfReader(buffer1).pages[0])
-    writer.add_page(PdfReader(buffer2).pages[0])
 
-    template_path = "assets/template.pdf"
+    # ── Pages 1 & 2: merge content on TOP of template page1/page2
+    # so they inherit the same border as the template ──
     if os.path.exists(template_path):
         template_reader = PdfReader(template_path)
+
+        # Page 1: use template page 1 as base (has the border), merge our content on top
+        if len(template_reader.pages) >= 1:
+            base_p1 = template_reader.pages[0]
+            content_p1 = PdfReader(buffer1).pages[0]
+            base_p1.merge_page(content_p1)
+            writer.add_page(base_p1)
+
+        # Page 2: use template page 2 as base (has the border), merge our content on top
+        if len(template_reader.pages) >= 2:
+            base_p2 = template_reader.pages[1]
+            content_p2 = PdfReader(buffer2).pages[0]
+            base_p2.merge_page(content_p2)
+            writer.add_page(base_p2)
+
+        # Page 3: scale from original large size down to A4
         if len(template_reader.pages) >= 3:
-            page3_template = template_reader.pages[2]
-            border_reader = PdfReader(buffer3)
-            page3_template.merge_page(border_reader.pages[0])
-            writer.add_page(page3_template)
+            page3 = template_reader.pages[2]
+            orig_w = float(page3.mediabox.width)
+            orig_h = float(page3.mediabox.height)
+            a4_w, a4_h = A4  # 595.28, 841.89
+
+            scale_x = a4_w / orig_w
+            scale_y = a4_h / orig_h
+
+            # Apply scale transformation to shrink page 3 to A4
+            page3.add_transformation(Transformation().scale(scale_x, scale_y))
+            page3.mediabox.lower_left  = (0, 0)
+            page3.mediabox.upper_right = (a4_w, a4_h)
+
+            writer.add_page(page3)
+    else:
+        # Fallback if no template: just add pages with drawn border
+        buf_border = io.BytesIO()
+        cb = canvas.Canvas(buf_border, pagesize=A4)
+        draw_outer_border(cb, A4[0], A4[1]); cb.save(); buf_border.seek(0)
+
+        p1 = PdfReader(buffer1).pages[0]
+        p1.merge_page(PdfReader(buf_border).pages[0])
+        writer.add_page(p1)
+
+        buf_border.seek(0)
+        p2 = PdfReader(buffer2).pages[0]
+        p2.merge_page(PdfReader(buf_border).pages[0])
+        writer.add_page(p2)
 
     with open(output_path, 'wb') as f:
         writer.write(f)
@@ -365,7 +405,7 @@ def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, o
 # ==========================================
 # STREAMLIT UI — 3 TAB DESIGN
 # ==========================================
-st.set_page_config(page_title="AI Prescription Generator", layout="centered")
+st.set_page_config(page_title="AI Prescription Generator", layout="wide")
 
 # ── Custom CSS ────────────────────────────────────────────────────────────
 st.markdown("""
@@ -378,7 +418,15 @@ html, body, [class*="css"] {
 
 /* Hide default streamlit chrome */
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding-top: 1.5rem; padding-bottom: 2rem; max-width: 780px; }
+.block-container { 
+    padding-top: 1.5rem; 
+    padding-bottom: 2rem; 
+    max-width: 860px;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
 
 /* ── Logo header ── */
 .aa-header {
@@ -389,11 +437,11 @@ html, body, [class*="css"] {
     border-bottom: 2px solid #e8e8e8;
     margin-bottom: 6px;
 }
-.aa-header img { height: 52px; }
+.aa-header img { height: 56px; }
 .aa-header .aa-name {
     color: #064b86;
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 26px;
+    font-weight: 800;
     line-height: 1.25;
 }
 
@@ -405,10 +453,10 @@ html, body, [class*="css"] {
 }
 .stTabs [data-baseweb="tab"] {
     font-family: 'Lato', sans-serif;
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 17px;
+    font-weight: 700;
     color: #666;
-    padding: 10px 28px;
+    padding: 12px 32px;
     border: none;
     border-bottom: 3px solid transparent;
     background: transparent;
@@ -425,9 +473,9 @@ html, body, [class*="css"] {
 
 /* ── Section headings inside tabs ── */
 .tab-section-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: #999;
+    font-size: 15px;
+    font-weight: 800;
+    color: #888;
     letter-spacing: 1.2px;
     text-transform: uppercase;
     margin-bottom: 16px;
@@ -445,16 +493,16 @@ html, body, [class*="css"] {
     margin-bottom: 14px;
 }
 .info-card .label {
-    font-size: 11px;
-    font-weight: 700;
-    color: #aaa;
+    font-size: 13px;
+    font-weight: 800;
+    color: #999;
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 4px;
 }
 .info-card .value {
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 17px;
+    font-weight: 700;
     color: #1a1a1a;
 }
 
@@ -468,32 +516,34 @@ html, body, [class*="css"] {
 }
 .roadmap-step:last-child { border-bottom: none; }
 .step-badge {
-    min-width: 28px; height: 28px;
+    min-width: 32px; height: 32px;
     background: #064b86;
     color: white;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700;
+    font-size: 14px; font-weight: 800;
     flex-shrink: 0; margin-top: 1px;
 }
-.step-text { font-size: 14px; color: #333; line-height: 1.5; }
+.step-text { font-size: 16px; color: #222; line-height: 1.5; font-weight: 700; }
+.step-text span { font-weight: 400; color: #666; font-size: 14px; }
 
 /* ── Outcome bullets ── */
 .outcome-item {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 9px 0;
+    padding: 10px 0;
     border-bottom: 1px solid #f3f3f3;
-    font-size: 14px;
-    color: #333;
+    font-size: 15px;
+    font-weight: 500;
+    color: #222;
     line-height: 1.5;
 }
 .outcome-dot {
-    min-width: 7px; height: 7px;
+    min-width: 8px; height: 8px;
     background: #c0392b;
     border-radius: 50%;
-    margin-top: 6px; flex-shrink: 0;
+    margin-top: 7px; flex-shrink: 0;
 }
 
 /* ── Career table styling ── */
@@ -523,18 +573,20 @@ html, body, [class*="css"] {
     border-radius: 0 10px 10px 0;
     padding: 18px 20px;
     margin-bottom: 16px;
-    font-size: 14px;
+    font-size: 16px;
     line-height: 1.7;
     color: #222;
+    font-weight: 500;
 }
 .bullet-item {
     display: flex; gap: 10px;
-    padding: 8px 0;
-    font-size: 14px; line-height: 1.6; color: #333;
+    padding: 10px 0;
+    font-size: 15px; line-height: 1.6; color: #222;
     border-bottom: 1px solid #f0f0f0;
+    font-weight: 500;
 }
 .bullet-item:last-child { border-bottom: none; }
-.bullet-icon { color: #c0392b; font-weight: 700; flex-shrink: 0; }
+.bullet-icon { color: #c0392b; font-weight: 800; flex-shrink: 0; font-size: 17px; }
 
 /* ── Generate button ── */
 div.stButton > button {
@@ -599,8 +651,12 @@ div.stDownloadButton > button:hover { background: #e74c3c; }
 """, unsafe_allow_html=True)
 
 # ── Header ─────────────────────────────────────────────────────────────────
+# Use left column to keep UI left-aligned and not stretched
+main_col, _ = st.columns([2, 1])
+
 logo_url = "https://raw.githubusercontent.com/Analytics-Avenue/streamlit-dataapp/main/logo.png"
-st.markdown(f"""
+with main_col:
+    st.markdown(f"""
 <div class="aa-header">
     <img src="{logo_url}">
     <div class="aa-name">Analytics Avenue &<br>Advanced Analytics</div>
@@ -608,25 +664,26 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Asset check ────────────────────────────────────────────────────────────
-header_ok   = os.path.exists("assets/header.png")
-template_ok = os.path.exists("assets/template.pdf")
-if not (header_ok and template_ok):
-    st.error("❌ Missing required assets!")
-    st.write(f"{'✅' if header_ok else '❌'} assets/header.png")
-    st.write(f"{'✅' if template_ok else '❌'} assets/template.pdf")
-    st.stop()
+with main_col:
+    header_ok   = os.path.exists("assets/header.png")
+    template_ok = os.path.exists("assets/template.pdf")
+    if not (header_ok and template_ok):
+        st.error("❌ Missing required assets!")
+        st.write(f"{'✅' if header_ok else '❌'} assets/header.png")
+        st.write(f"{'✅' if template_ok else '❌'} assets/template.pdf")
+        st.stop()
 
-# ── Session state ──────────────────────────────────────────────────────────
-if "ai_content"         not in st.session_state: st.session_state.ai_content         = None
-if "table_rows"         not in st.session_state: st.session_state.table_rows         = None
-if "domain_rowspan_map" not in st.session_state: st.session_state.domain_rowspan_map = None
-if "pdf_path"           not in st.session_state: st.session_state.pdf_path           = None
-if "submitted_name"     not in st.session_state: st.session_state.submitted_name     = ""
-if "submitted_status"   not in st.session_state: st.session_state.submitted_status   = ""
-if "submitted_domains"  not in st.session_state: st.session_state.submitted_domains  = []
+    # ── Session state ──────────────────────────────────────────────────────────
+    if "ai_content"         not in st.session_state: st.session_state.ai_content         = None
+    if "table_rows"         not in st.session_state: st.session_state.table_rows         = None
+    if "domain_rowspan_map" not in st.session_state: st.session_state.domain_rowspan_map = None
+    if "pdf_path"           not in st.session_state: st.session_state.pdf_path           = None
+    if "submitted_name"     not in st.session_state: st.session_state.submitted_name     = ""
+    if "submitted_status"   not in st.session_state: st.session_state.submitted_status   = ""
+    if "submitted_domains"  not in st.session_state: st.session_state.submitted_domains  = []
 
-# ── 3 TABS ─────────────────────────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs(["Overview", "Important Attributes", "Application"])
+    # ── 3 TABS ─────────────────────────────────────────────────────────────────
+    tab1, tab2, tab3 = st.tabs(["Overview", "Important Attributes", "Application"])
 
 # ══════════════════════════════════════════════════════════════
 # TAB 1 — OVERVIEW  (input form)
