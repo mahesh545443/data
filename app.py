@@ -628,148 +628,136 @@ def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, o
     return True, None
 
 # STREAMLIT UI
+# STREAMLIT UI
 # ==========================================
 st.set_page_config(page_title="Analytics Avenue Generator", layout="wide")
 
-# Global CSS - Bold, Left-aligned, Production UI
 st.markdown("""
 <style>
-    /* Import bold production font */
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
 
     html, body, [class*="css"] {
-        font-family: 'DM Sans', sans-serif;
+        font-family: 'Inter', sans-serif !important;
     }
 
-    /* Remove default padding */
+    /* Remove Streamlit default padding */
     .block-container {
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
+        padding-top: 2rem !important;
+        padding-left: 3rem !important;
+        padding-right: 3rem !important;
         max-width: 100% !important;
     }
 
-    /* Header brand area */
-    .brand-header {
+    /* Hide streamlit header/footer */
+    #MainMenu, footer, header {visibility: hidden;}
+
+    /* ── Brand header ── */
+    .brand-wrap {
         display: flex;
         align-items: center;
-        gap: 16px;
-        padding: 28px 0 12px 0;
-        border-bottom: 4px solid #064b86;
+        gap: 18px;
         margin-bottom: 32px;
     }
-
-    .brand-text-top {
-        font-family: 'Syne', sans-serif;
-        font-size: 42px;
+    .brand-name {
+        font-size: 28px;
         font-weight: 800;
         color: #064b86;
-        line-height: 1.1;
-        letter-spacing: -1px;
+        line-height: 1.25;
     }
 
-    .brand-text-sub {
-        font-family: 'Syne', sans-serif;
-        font-size: 22px;
-        font-weight: 700;
-        color: #1a7ed4;
-        letter-spacing: 0.5px;
-    }
-
-    /* Page title */
+    /* ── Page title ── */
     h1 {
-        font-family: 'Syne', sans-serif !important;
-        font-size: 48px !important;
+        font-size: 52px !important;
+        font-weight: 900 !important;
+        color: #0a0a0a !important;
+        letter-spacing: -1px !important;
+        margin-bottom: 4px !important;
+        line-height: 1.1 !important;
+    }
+
+    /* ── Subtitle ── */
+    .subtitle {
+        font-size: 18px;
+        font-weight: 500;
+        color: #555;
+        margin-bottom: 40px;
+    }
+
+    /* ── Section headings (h2/h3) ── */
+    h2, h3 {
+        font-size: 28px !important;
         font-weight: 800 !important;
         color: #0a0a0a !important;
-        letter-spacing: -1.5px !important;
-        margin-bottom: 6px !important;
+        margin-bottom: 16px !important;
     }
 
-    /* Section labels */
+    /* ── Form labels ── */
     .stTextInput label,
     .stSelectbox label,
     .stMultiSelect label {
-        font-size: 16px !important;
+        font-size: 15px !important;
         font-weight: 700 !important;
         color: #0a0a0a !important;
-        text-transform: uppercase !important;
-        letter-spacing: 1px !important;
+        letter-spacing: 0.3px !important;
+        margin-bottom: 4px !important;
     }
 
-    /* Input fields */
-    .stTextInput input,
-    .stSelectbox select {
+    /* ── Input boxes ── */
+    .stTextInput input {
+        font-size: 16px !important;
+        font-weight: 500 !important;
+        padding: 12px 14px !important;
+        border: 1.5px solid #d0d7de !important;
+        border-radius: 6px !important;
+        background: #fff !important;
+    }
+
+    /* ── Submit button ── */
+    .stFormSubmitButton > button {
+        background-color: #064b86 !important;
+        color: #fff !important;
         font-size: 17px !important;
-        font-weight: 600 !important;
-        padding: 12px 16px !important;
-        border: 2px solid #d0d7de !important;
-        border-radius: 8px !important;
-    }
-
-    /* Submit button */
-    .stFormSubmitButton button {
-        background: #064b86 !important;
-        color: white !important;
-        font-family: 'Syne', sans-serif !important;
-        font-size: 20px !important;
-        font-weight: 800 !important;
-        padding: 16px 32px !important;
-        border-radius: 8px !important;
-        border: none !important;
-        letter-spacing: 1px !important;
-        text-transform: uppercase !important;
-        transition: background 0.2s !important;
-    }
-
-    .stFormSubmitButton button:hover {
-        background: #043a6a !important;
-    }
-
-    /* Download button */
-    .stDownloadButton button {
-        background: #12a150 !important;
-        color: white !important;
-        font-size: 18px !important;
         font-weight: 700 !important;
-        padding: 14px 28px !important;
-        border-radius: 8px !important;
+        padding: 14px 36px !important;
+        border-radius: 6px !important;
         border: none !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.8px !important;
+        letter-spacing: 0.3px !important;
+        margin-top: 12px !important;
+        width: auto !important;
+    }
+    .stFormSubmitButton > button:hover {
+        background-color: #053d70 !important;
     }
 
-    /* Error / success alerts */
-    .stAlert {
+    /* ── Download button ── */
+    .stDownloadButton > button {
+        background-color: #1a7f37 !important;
+        color: #fff !important;
         font-size: 16px !important;
         font-weight: 700 !important;
+        padding: 12px 28px !important;
+        border-radius: 6px !important;
+        border: none !important;
     }
 
-    /* Expander headers */
-    .streamlit-expanderHeader {
-        font-size: 18px !important;
+    /* ── Alert text ── */
+    .stAlert p {
+        font-size: 15px !important;
+        font-weight: 600 !important;
+    }
+
+    /* ── Expander ── */
+    .streamlit-expanderHeader p {
+        font-size: 17px !important;
         font-weight: 700 !important;
-        color: #064b86 !important;
+        color: #0a0a0a !important;
     }
 
-    /* Divider accent */
-    .section-title {
-        font-family: 'Syne', sans-serif;
-        font-size: 22px;
-        font-weight: 800;
-        color: #064b86;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        margin: 28px 0 12px 0;
-        padding-left: 12px;
-        border-left: 5px solid #064b86;
-    }
-
-    /* Form card background */
-    section[data-testid="stForm"] {
-        background: #f4f7fb;
-        border-radius: 12px;
-        padding: 28px 32px !important;
-        border: 1.5px solid #dce4ef;
+    /* ── Divider line ── */
+    .divider {
+        border: none;
+        border-top: 2px solid #e0e0e0;
+        margin: 28px 0 36px 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -777,17 +765,18 @@ st.markdown("""
 # ── BRAND HEADER ──────────────────────────────────────────
 logo_url = "https://raw.githubusercontent.com/Analytics-Avenue/streamlit-dataapp/main/logo.png"
 st.markdown(f"""
-<div class="brand-header">
-    <img src="{logo_url}" width="64" style="border-radius:10px;">
-    <div>
-        <div class="brand-text-top">Analytics Avenue</div>
-        <div class="brand-text-sub">Advanced Analytics Division</div>
+<div class="brand-wrap">
+    <img src="{logo_url}" width="64" style="border-radius:8px;">
+    <div class="brand-name">
+        Analytics Avenue &amp;<br>Advanced Analytics
     </div>
 </div>
+<hr class="divider">
 """, unsafe_allow_html=True)
 
+# ── PAGE TITLE ────────────────────────────────────────────
 st.title("🤖 AI Prescription Generator")
-st.markdown('<p style="font-size:18px; font-weight:600; color:#444; margin-top:-10px; margin-bottom:28px;">Generate a personalised data career prescription powered by AI</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">Generate a personalised data career prescription powered by AI</p>', unsafe_allow_html=True)
 
 # ── ASSET CHECK ───────────────────────────────────────────
 header_ok = os.path.exists("assets/header.png")
@@ -799,10 +788,10 @@ if not (header_ok and template_ok):
     st.stop()
 
 # ── FORM ──────────────────────────────────────────────────
-st.markdown('<div class="section-title">Your Details</div>', unsafe_allow_html=True)
+st.subheader("Your Details")
 
 with st.form("form"):
-    col1, col2 = st.columns([1, 1], gap="large")
+    col1, col2 = st.columns(2, gap="large")
 
     with col1:
         name = st.text_input("Name *", placeholder="e.g. Student Name")
@@ -814,13 +803,12 @@ with st.form("form"):
         "Target Domains *",
         ["Finance", "Supply Chain", "Healthcare", "HR Analytics", "E-Commerce",
          "Automobile", "Manufacturing", "Retail", "Cyber Security"],
-        help="Select 1–3 domains that best match your career goals"
+        help="Select 1–3 domains"
     )
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    submit = st.form_submit_button("🚀 Generate My Prescription", use_container_width=True)
+    submit = st.form_submit_button("🚀 Generate Prescription")
 
-# ── SUBMIT LOGIC ──────────────────────────────────────────
+# ── RESULT ────────────────────────────────────────────────
 if submit:
     errors = []
     if not name:
@@ -832,7 +820,7 @@ if submit:
         for e in errors:
             st.error(e)
     else:
-        with st.spinner("🤖 AI generating your prescription..."):
+        with st.spinner("🤖 AI generating prescription..."):
             ai_content = get_ai_prescription_text(domains)
 
         if "error" in ai_content:
@@ -857,17 +845,16 @@ if submit:
 
                 with open(output_path, "rb") as f:
                     st.download_button(
-                        "⬇️ Download Your PDF",
+                        "⬇️ Download PDF",
                         f,
                         file_name=filename,
-                        mime="application/pdf",
-                        use_container_width=True
+                        mime="application/pdf"
                     )
 
-                with st.expander("📋 View AI Content"):
+                with st.expander("📋 AI Content"):
                     st.json(ai_content)
 
-                with st.expander("📊 View Career Data"):
+                with st.expander("📊 Career Data"):
                     st.write(f"**Roles generated:** {len(table_rows)}")
                     st.write(f"**Domains:** {domain_rowspan_map}")
             else:
