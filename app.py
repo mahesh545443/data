@@ -627,41 +627,186 @@ def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, o
     
     return True, None
 
-# ==========================================
 # STREAMLIT UI
 # ==========================================
-st.set_page_config(page_title="Analytics Avenue Generator", layout="centered")
+st.set_page_config(page_title="Analytics Avenue Generator", layout="wide")
 
-# Logo and Company Name
+# Global CSS - Bold, Left-aligned, Production UI
+st.markdown("""
+<style>
+    /* Import bold production font */
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'DM Sans', sans-serif;
+    }
+
+    /* Remove default padding */
+    .block-container {
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+        max-width: 100% !important;
+    }
+
+    /* Header brand area */
+    .brand-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 28px 0 12px 0;
+        border-bottom: 4px solid #064b86;
+        margin-bottom: 32px;
+    }
+
+    .brand-text-top {
+        font-family: 'Syne', sans-serif;
+        font-size: 42px;
+        font-weight: 800;
+        color: #064b86;
+        line-height: 1.1;
+        letter-spacing: -1px;
+    }
+
+    .brand-text-sub {
+        font-family: 'Syne', sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        color: #1a7ed4;
+        letter-spacing: 0.5px;
+    }
+
+    /* Page title */
+    h1 {
+        font-family: 'Syne', sans-serif !important;
+        font-size: 48px !important;
+        font-weight: 800 !important;
+        color: #0a0a0a !important;
+        letter-spacing: -1.5px !important;
+        margin-bottom: 6px !important;
+    }
+
+    /* Section labels */
+    .stTextInput label,
+    .stSelectbox label,
+    .stMultiSelect label {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        color: #0a0a0a !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1px !important;
+    }
+
+    /* Input fields */
+    .stTextInput input,
+    .stSelectbox select {
+        font-size: 17px !important;
+        font-weight: 600 !important;
+        padding: 12px 16px !important;
+        border: 2px solid #d0d7de !important;
+        border-radius: 8px !important;
+    }
+
+    /* Submit button */
+    .stFormSubmitButton button {
+        background: #064b86 !important;
+        color: white !important;
+        font-family: 'Syne', sans-serif !important;
+        font-size: 20px !important;
+        font-weight: 800 !important;
+        padding: 16px 32px !important;
+        border-radius: 8px !important;
+        border: none !important;
+        letter-spacing: 1px !important;
+        text-transform: uppercase !important;
+        transition: background 0.2s !important;
+    }
+
+    .stFormSubmitButton button:hover {
+        background: #043a6a !important;
+    }
+
+    /* Download button */
+    .stDownloadButton button {
+        background: #12a150 !important;
+        color: white !important;
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        padding: 14px 28px !important;
+        border-radius: 8px !important;
+        border: none !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.8px !important;
+    }
+
+    /* Error / success alerts */
+    .stAlert {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+    }
+
+    /* Expander headers */
+    .streamlit-expanderHeader {
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        color: #064b86 !important;
+    }
+
+    /* Divider accent */
+    .section-title {
+        font-family: 'Syne', sans-serif;
+        font-size: 22px;
+        font-weight: 800;
+        color: #064b86;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin: 28px 0 12px 0;
+        padding-left: 12px;
+        border-left: 5px solid #064b86;
+    }
+
+    /* Form card background */
+    section[data-testid="stForm"] {
+        background: #f4f7fb;
+        border-radius: 12px;
+        padding: 28px 32px !important;
+        border: 1.5px solid #dce4ef;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ── BRAND HEADER ──────────────────────────────────────────
 logo_url = "https://raw.githubusercontent.com/Analytics-Avenue/streamlit-dataapp/main/logo.png"
 st.markdown(f"""
-<div style="display:flex; align-items:center; margin-bottom:20px;">
-    <img src="{logo_url}" width="60" style="margin-right:10px;">
-    <div style="line-height:1;">
-        <div style="color:#064b86; font-size:36px; font-weight:bold; margin:0;">Analytics Avenue &</div>
-        <div style="color:#064b86; font-size:36px; font-weight:bold; margin:0;">Advanced Analytics</div>
+<div class="brand-header">
+    <img src="{logo_url}" width="64" style="border-radius:10px;">
+    <div>
+        <div class="brand-text-top">Analytics Avenue</div>
+        <div class="brand-text-sub">Advanced Analytics Division</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.title("🤖 AI Prescription Generator")
+st.markdown('<p style="font-size:18px; font-weight:600; color:#444; margin-top:-10px; margin-bottom:28px;">Generate a personalised data career prescription powered by AI</p>', unsafe_allow_html=True)
 
-# Check assets
+# ── ASSET CHECK ───────────────────────────────────────────
 header_ok = os.path.exists("assets/header.png")
 template_ok = os.path.exists("assets/template.pdf")
-
 if not (header_ok and template_ok):
     st.error("❌ Missing required assets!")
     st.write(f"{'✅' if header_ok else '❌'} header.png")
     st.write(f"{'✅' if template_ok else '❌'} template.pdf")
     st.stop()
 
+# ── FORM ──────────────────────────────────────────────────
+st.markdown('<div class="section-title">Your Details</div>', unsafe_allow_html=True)
+
 with st.form("form"):
-    col1, col2 = st.columns(2)
-    
+    col1, col2 = st.columns([1, 1], gap="large")
+
     with col1:
         name = st.text_input("Name *", placeholder="e.g. Student Name")
-        
+
     with col2:
         status = st.selectbox("Status *", ["Working Professional", "Student", "Job Seeker"])
 
@@ -669,14 +814,15 @@ with st.form("form"):
         "Target Domains *",
         ["Finance", "Supply Chain", "Healthcare", "HR Analytics", "E-Commerce",
          "Automobile", "Manufacturing", "Retail", "Cyber Security"],
-        help="Select 1-3 domains"
+        help="Select 1–3 domains that best match your career goals"
     )
 
-    submit = st.form_submit_button("🚀 Generate Prescription", use_container_width=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    submit = st.form_submit_button("🚀 Generate My Prescription", use_container_width=True)
 
+# ── SUBMIT LOGIC ──────────────────────────────────────────
 if submit:
     errors = []
-
     if not name:
         errors.append("❌ Name is required")
     if not domains:
@@ -686,44 +832,44 @@ if submit:
         for e in errors:
             st.error(e)
     else:
-        with st.spinner("🤖 AI generating prescription..."):
+        with st.spinner("🤖 AI generating your prescription..."):
             ai_content = get_ai_prescription_text(domains)
-            
-            if "error" in ai_content:
-                st.error(f"AI Error: {ai_content['error']}")
-            else:
-                with st.spinner("📊 Building career table..."):
-                    table_rows, domain_rowspan_map = get_table_data_with_rowspan(domains)
-                
-                with st.spinner("📄 Creating PDF..."):
-                    ts = int(time.time())
-                    safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '_')]).rstrip()
-                    filename = f"Prescription_{safe_name.replace(' ', '_')}_{ts}.pdf"
-                    
-                    output_path = f"output/{filename}"
-                    os.makedirs("output", exist_ok=True)
-                    
-                    success, error_msg = create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, output_path)
-                    
-                    if success:
-                        st.success("✅ Prescription Generated!")
-                        
-                        with open(output_path, "rb") as f:
-                            st.download_button(
-                                "⬇️ Download PDF",
-                                f,
-                                file_name=filename,
-                                mime="application/pdf",
-                                use_container_width=True
-                            )
-                        
-                        with st.expander("📋 AI Content"):
-                            st.json(ai_content)
-                        
-                        with st.expander("📊 Career Data"):
-                            st.write(f"Generated {len(table_rows)} roles")
-                            st.write(f"Domains: {domain_rowspan_map}")
-                    else:
 
-                        st.error(f"PDF Error: {error_msg}")
+        if "error" in ai_content:
+            st.error(f"AI Error: {ai_content['error']}")
+        else:
+            with st.spinner("📊 Building career table..."):
+                table_rows, domain_rowspan_map = get_table_data_with_rowspan(domains)
+
+            with st.spinner("📄 Creating PDF..."):
+                ts = int(time.time())
+                safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '_')]).rstrip()
+                filename = f"Prescription_{safe_name.replace(' ', '_')}_{ts}.pdf"
+                output_path = f"output/{filename}"
+                os.makedirs("output", exist_ok=True)
+
+                success, error_msg = create_final_pdf(
+                    name, status, ai_content, table_rows, domain_rowspan_map, output_path
+                )
+
+            if success:
+                st.success("✅ Prescription Generated Successfully!")
+
+                with open(output_path, "rb") as f:
+                    st.download_button(
+                        "⬇️ Download Your PDF",
+                        f,
+                        file_name=filename,
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+
+                with st.expander("📋 View AI Content"):
+                    st.json(ai_content)
+
+                with st.expander("📊 View Career Data"):
+                    st.write(f"**Roles generated:** {len(table_rows)}")
+                    st.write(f"**Domains:** {domain_rowspan_map}")
+            else:
+                st.error(f"PDF Error: {error_msg}")
 
