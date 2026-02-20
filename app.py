@@ -201,7 +201,10 @@ def get_table_data_with_rowspan(selected_domains):
 # ==========================================
 # PDF HELPER FUNCTIONS
 # ==========================================
-# FIX 2: draw_outer_border removed entirely
+def draw_outer_border(c, page_width, page_height):
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(1.5)
+    c.rect(15, 15, page_width - 30, page_height - 30, stroke=1, fill=0)
 
 def draw_header_no_line(c, page_width, page_height):
     header_path = "assets/header.png"
@@ -240,7 +243,7 @@ def create_page1(c, name, status, ai_content):
     R = page_width - MARGINS['right']
     W = R - L
 
-    # FIX 2: No draw_outer_border call
+    draw_outer_border(c, page_width, page_height)
     header_space = draw_header_no_line(c, page_width, page_height)
     y = page_height - header_space - 15
 
@@ -378,7 +381,7 @@ def create_page1(c, name, status, ai_content):
 # ==========================================
 def create_page2(c, ai_content, table_rows, domain_rowspan_map):
     page_width, page_height = A4
-    # FIX 2: No draw_outer_border call
+    draw_outer_border(c, page_width, page_height)
     header_space = draw_header_no_line(c, page_width, page_height)
     L = MARGINS['left']
     R = page_width - MARGINS['right']
@@ -860,4 +863,3 @@ with tab2:
                         st.write(f"**Domains:** {domain_rowspan_map}")
                 else:
                     st.error(f"PDF Error: {error_msg}")
-
