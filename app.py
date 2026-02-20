@@ -203,8 +203,8 @@ def get_table_data_with_rowspan(selected_domains):
 # ==========================================
 def draw_outer_border(c, page_width, page_height):
     c.setStrokeColor(colors.black)
-    c.setLineWidth(1.5)
-    c.rect(15, 15, page_width - 30, page_height - 30, stroke=1, fill=0)
+    c.setLineWidth(2)
+    c.rect(10, 10, page_width - 20, page_height - 20, stroke=1, fill=0)
 
 def draw_header_no_line(c, page_width, page_height):
     header_path = "assets/header.png"
