@@ -199,14 +199,9 @@ def get_table_data_with_rowspan(selected_domains):
 
 
 # ==========================================
-# PDF HELPER FUNCTIONS — UNCHANGED
+# PDF HELPER FUNCTIONS
 # ==========================================
-def draw_outer_border(c, page_width, page_height):
-    margin = MARGINS['page_border']
-    c.setStrokeColor(colors.black)
-    c.setLineWidth(2)
-    c.rect(margin, margin, page_width - 2*margin, page_height - 2*margin, stroke=1, fill=0)
-
+# FIX 2: draw_outer_border removed entirely
 
 def draw_header_no_line(c, page_width, page_height):
     header_path = "assets/header.png"
@@ -245,7 +240,7 @@ def create_page1(c, name, status, ai_content):
     R = page_width - MARGINS['right']
     W = R - L
 
-    draw_outer_border(c, page_width, page_height)
+    # FIX 2: No draw_outer_border call
     header_space = draw_header_no_line(c, page_width, page_height)
     y = page_height - header_space - 15
 
@@ -315,9 +310,9 @@ def create_page1(c, name, status, ai_content):
     y -= 14
 
     roadmap = [
-        "Step 1 → Learn Tools (SQL, Python, Statistics, Power BI, Machine Learning, Gen AI)",
-        "Step 2 → Domain-Specific Projects",
-        "Step 3 → Role Readiness (interviews, placement support)"
+        "Step 1 \u2192 Learn Tools (SQL, Python, Statistics, Power BI, Machine Learning, Gen AI)",
+        "Step 2 \u2192 Domain-Specific Projects",
+        "Step 3 \u2192 Role Readiness (interviews, placement support)"
     ]
     for step in roadmap:
         p_step = Paragraph(step, style_normal)
@@ -379,11 +374,11 @@ def create_page1(c, name, status, ai_content):
 
 
 # ==========================================
-# PAGE 2 — UNCHANGED
+# PAGE 2 — ALL 3 FIXES APPLIED
 # ==========================================
 def create_page2(c, ai_content, table_rows, domain_rowspan_map):
     page_width, page_height = A4
-    draw_outer_border(c, page_width, page_height)
+    # FIX 2: No draw_outer_border call
     header_space = draw_header_no_line(c, page_width, page_height)
     L = MARGINS['left']
     R = page_width - MARGINS['right']
@@ -424,31 +419,38 @@ def create_page2(c, ai_content, table_rows, domain_rowspan_map):
     services_table.wrapOn(c, W, page_height)
     services_h = services_table._height
     services_table.drawOn(c, L, y - services_h)
-    y -= (services_h + 20)
+    y -= (services_h + 12)
 
-    y -= 12
+    # FIX 1: Title bold + bracketed note on second line (italic), NO bottom box
     c.setFont("Times-Bold", 11)
-    c.drawString(L, y, f"{ai_content['domains_title']} – Career Prescription Table")
+    c.drawString(L, y, f"{ai_content['domains_title']} \u2013 Career Prescription Table")
+    y -= 14
+    c.setFont("Times-Italic", 11)
+    c.drawString(L, y, "(Actual projects will be revealed during placement training)")
     y -= 14
 
     headers = ["Domain", "Role", "Exciting Challenge", "Key Technical Skills", "Targeted Companies"]
     career_data = [[Paragraph(f"<b>{h}</b>", style_heading) for h in headers]]
 
+    # FIX 3: Build processed_domains and full_domain_rowspan from row[0] directly
     current_row = 1
-    processed_domains = {}
+    processed_domains = {}    # full domain name -> start row index in table
+    full_domain_rowspan = {}  # full domain name -> row count
 
     for row in table_rows:
-        domain = row[0]
-        if domain not in processed_domains:
-            processed_domains[domain] = current_row
+        full_domain = row[0]  # e.g. "Finance Analytics"
+        if full_domain not in processed_domains:
+            processed_domains[full_domain] = current_row
+            full_domain_rowspan[full_domain] = 1
             career_data.append([
-                Paragraph(f"<b>{domain}</b>", style_small),
+                Paragraph(f"<b>{full_domain}</b>", style_small),
                 Paragraph(str(row[1]), style_small),
                 Paragraph(str(row[2]), style_small),
                 Paragraph(str(row[3]), style_small),
                 Paragraph(str(row[4]), style_small)
             ])
         else:
+            full_domain_rowspan[full_domain] += 1
             career_data.append([
                 "",
                 Paragraph(str(row[1]), style_small),
@@ -465,46 +467,37 @@ def create_page2(c, ai_content, table_rows, domain_rowspan_map):
         ('BACKGROUND', (0, 0), (-1, 0), colors.white),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('NOSPLIT', (0, 0), (-1, -1)),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('BOX', (0, 0), (-1, -1), 1, colors.black),
-        ('INNERGRID', (1, 0), (-1, -1), 1, colors.black),
-        ('LINEAFTER', (0, 0), (0, -1), 1, colors.black),
         ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+        ('INNERGRID', (1, 0), (-1, -1), 0.5, colors.black),
+        ('LINEAFTER', (0, 0), (0, -1), 1, colors.black),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
     ]
 
-    for domain, start_row in processed_domains.items():
-        rowspan = domain_rowspan_map.get(domain, 1)
+    for full_domain, start_row in processed_domains.items():
+        rowspan = full_domain_rowspan[full_domain]
         if rowspan > 1:
+            # SPAN domain cell vertically across all its rows
             table_style.append(('SPAN', (0, start_row), (0, start_row + rowspan - 1)))
+            table_style.append(('VALIGN', (0, start_row), (0, start_row + rowspan - 1), 'MIDDLE'))
+            # Light grey thin line between rows of SAME domain (cols 1 onward only)
             for sub_row in range(start_row, start_row + rowspan - 1):
-                table_style.append(('LINEBELOW', (1, sub_row), (-1, sub_row), 1, colors.black))
-        table_style.append(('LINEBELOW', (0, start_row + rowspan - 1), (-1, start_row + rowspan - 1), 1, colors.black))
+                table_style.append(('LINEBELOW', (1, sub_row), (-1, sub_row), 0.3, colors.lightgrey))
+        # FIX 3: Thick black line ONLY after the LAST row of each domain group
+        table_style.append(('LINEBELOW', (0, start_row + rowspan - 1), (-1, start_row + rowspan - 1), 1.5, colors.black))
 
     career_table.setStyle(TableStyle(table_style))
     career_table.wrapOn(c, W, page_height)
     career_h = career_table._height
     career_table.drawOn(c, L, y - career_h)
-    y -= (career_h + 15)
-
-    reveal_text = "Actual projects will be revealed during placement training"
-    box_width = W
-    box_height = 30
-    if y - box_height < MARGINS['bottom']:
-        y = MARGINS['bottom'] + box_height + 5
-    c.setStrokeColor(colors.black)
-    c.setLineWidth(1)
-    c.rect(L, y - box_height, box_width, box_height, stroke=1, fill=0)
-    c.setFont("Times-Bold", 11)
-    text_width = c.stringWidth(reveal_text, "Times-Bold", 11)
-    text_x = L + (box_width - text_width) / 2
-    text_y = y - (box_height / 2) - 4
-    c.drawString(text_x, text_y, reveal_text)
+    # FIX 1: No bottom reveal box drawn here
 
 
 # ==========================================
-# PDF GENERATION — UNCHANGED
+# PDF GENERATION
 # ==========================================
 def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, output_path):
     buffer1 = io.BytesIO()
@@ -519,12 +512,7 @@ def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, o
     c2.save()
     buffer2.seek(0)
 
-    buffer3 = io.BytesIO()
-    c3 = canvas.Canvas(buffer3, pagesize=A4)
-    draw_outer_border(c3, A4[0], A4[1])
-    c3.save()
-    buffer3.seek(0)
-
+    # FIX 2: No border buffer for page 3
     writer = PdfWriter()
 
     reader1 = PdfReader(buffer1)
@@ -540,9 +528,7 @@ def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, o
             page3_template = template_reader.pages[2]
             if page3_template.mediabox.width != A4[0] or page3_template.mediabox.height != A4[1]:
                 page3_template.scale_to(A4[0], A4[1])
-            border_reader = PdfReader(buffer3)
-            page3_border = border_reader.pages[0]
-            page3_template.merge_page(page3_border)
+            # FIX 2: No border merge on page 3
             writer.add_page(page3_template)
 
     with open(output_path, 'wb') as f:
@@ -797,7 +783,7 @@ with tab1:
         """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════
-# TAB 2 — APPLICATION (original logic, untouched)
+# TAB 2 — APPLICATION
 # ════════════════════════════════════════════════════════
 with tab2:
 
@@ -874,3 +860,4 @@ with tab2:
                         st.write(f"**Domains:** {domain_rowspan_map}")
                 else:
                     st.error(f"PDF Error: {error_msg}")
+
