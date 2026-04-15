@@ -235,6 +235,11 @@ def create_page1(c, name, status, ai_content):
     R = page_width - MARGINS['right']
     W = R - L
 
+    # Thin outer border — matches page 3
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(0.8)
+    c.rect(8, 8, page_width - 16, page_height - 16, stroke=1, fill=0)
+
     header_space = draw_header_no_line(c, page_width, page_height)
     y = page_height - header_space - 15
 
@@ -370,6 +375,12 @@ def create_page1(c, name, status, ai_content):
 # ==========================================
 def create_page2(c, ai_content, table_rows, domain_rowspan_map):
     page_width, page_height = A4
+
+    # Thin outer border — matches page 3
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(0.8)
+    c.rect(8, 8, page_width - 16, page_height - 16, stroke=1, fill=0)
+
     header_space = draw_header_no_line(c, page_width, page_height)
     L = MARGINS['left']
     R = page_width - MARGINS['right']
