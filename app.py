@@ -198,16 +198,30 @@ def draw_header_no_line(c, page_width, page_height):
         img = Image.open(header_path)
         img_width, img_height = img.size
         aspect_ratio = img_width / img_height
-        header_height = 100
-        header_width = header_height * aspect_ratio
-        if header_width > page_width:
-            header_width = page_width
-            header_height = header_width / aspect_ratio
-        x_pos = (page_width - header_width) / 2
+
+        # Use full content width for maximum sharpness — no small scaling
+        L = MARGINS['left']
+        R = MARGINS['right']
+        header_width  = page_width - L - R
+        header_height = header_width / aspect_ratio
+
+        x_pos = L
         y_pos = page_height - header_height - 10
-        c.drawImage(header_path, x_pos, y_pos, width=header_width, height=header_height,
-                    preserveAspectRatio=True, mask='auto')
+
+        c.drawImage(
+            header_path, x_pos, y_pos,
+            width=header_width, height=header_height,
+            preserveAspectRatio=True, mask='auto'
+        )
+
+        # Horizontal line below header — same as page 3
+        line_y = y_pos - 6
+        c.setStrokeColor(colors.black)
+        c.setLineWidth(1)
+        c.line(L, line_y, page_width - R, line_y)
+
         return header_height + 30
+
     except Exception as e:
         return 100
 
