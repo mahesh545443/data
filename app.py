@@ -2,24 +2,38 @@ import streamlit as st
 import json
 import os
 import time
+import smtplib
+import io
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 from groq import Groq
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import Paragraph, Table, TableStyle
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.enums import TA_LEFT
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
-import io
+from docx import Document
+from docx.shared import Pt, RGBColor, Inches, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+import requests
+from lxml import etree
 
 # ==========================================
-# API KEY
+# API KEY & MAIL CONFIG
 # ==========================================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GMAIL_USER = os.getenv("GMAIL_USER", "")
+GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "")
 
 # ==========================================
-# UNIFORM SPACING FOR ENTIRE PDF
+# SPACING & MARGINS
 # ==========================================
 SPACING = {
     'section_gap': 18,
@@ -38,7 +52,7 @@ MARGINS = {
 }
 
 # ==========================================
-# COMPLETE CAREER TABLE DATA — UNCHANGED
+# CAREER TABLE DATA
 # ==========================================
 CAREER_TEMPLATES = {
     "Finance": [
@@ -114,18 +128,15 @@ CAREER_TEMPLATES = {
 }
 
 # ==========================================
-# AI PRESCRIPTION GENERATOR — UNCHANGED
+# AI PRESCRIPTION GENERATOR
 # ==========================================
 def get_ai_prescription_text(selected_domains):
     domain_str = " & ".join(selected_domains)
-
     if not GROQ_API_KEY or GROQ_API_KEY == "your_groq_api_key_here":
         return {"error": "API Key not configured"}
 
     PROMPT = f"""You are a Senior Data Scientist at Analytics Avenue.
-
 Generate a JSON prescription for: {domain_str}
-
 CRITICAL RULES:
 1. Use <b>text</b> for bold formatting on domain names, technologies
 2. Return ONLY these keys:
@@ -133,8 +144,6 @@ CRITICAL RULES:
    - "domain_bullets": List of domain descriptions with <b> tags (one bullet per domain)
    - "projects_bullet": Projects description with <b> tags
    - "final_sentence": Closing with <b> tags
-
-EXAMPLES:
 
 For "Finance & Supply Chain":
 {{
@@ -146,29 +155,6 @@ For "Finance & Supply Chain":
   "projects_bullet": "Hands-on projects include financial variance and profitability analysis, risk and anomaly detection, demand forecasting, inventory health analysis, logistics optimization, and supplier performance tracking. You will also leverage <b>GenAI</b> for automated insights, root-cause analysis, and conversational analytics (projects revealed during placement training).",
   "final_sentence": "You will apply <b>SQL, Statistics, Machine Learning, and GenAI</b> to <b>finance and supply chain</b> datasets, preparing you for high-impact analytics roles across these domains."
 }}
-
-For "Healthcare & Finance":
-{{
-  "intro_line": "Given your background, we will support your transition into <b>Healthcare and Finance Analytics</b> roles, equipping you to solve both operational and business challenges using <b>Machine Learning and GenAI</b>.",
-  "domain_bullets": [
-    "In <b>Healthcare Analytics</b>, you will focus on patient data analysis, clinical outcome monitoring, resource utilization optimization, risk prediction, and treatment effectiveness assessment.",
-    "In <b>Finance Analytics</b>, you will work on financial performance analysis, budgeting and forecasting, risk assessment, fraud detection support, and profitability modeling."
-  ],
-  "projects_bullet": "Hands-on projects include patient risk prediction, clinical trend analysis, healthcare operations insights, financial variance analysis, profitability modeling, risk assessment frameworks, and fraud pattern detection. You will also use <b>GenAI</b> for automated insights, root-cause analysis, and conversational analytics (actual projects revealed during placement training).",
-  "final_sentence": "You will apply <b>SQL, Statistics, Machine Learning, and GenAI</b> to extract insights from <b>healthcare systems and financial datasets</b>, preparing you for high-impact analytics roles across these domains."
-}}
-
-For "E-Commerce & Supply Chain":
-{{
-  "intro_line": "Given your background, we will support your transition into <b>E-Commerce and Supply Chain Analytics</b> roles, enabling you to solve customer engagement and operational challenges using <b>Machine Learning and GenAI</b>.",
-  "domain_bullets": [
-    "In <b>E-Commerce Analytics</b>, you will focus on sales optimization, customer behavior analysis, conversion rate improvement, pricing strategies, and campaign effectiveness tracking.",
-    "In <b>Supply Chain Analytics</b>, you will work on demand forecasting, inventory optimization, logistics efficiency, procurement analysis, and end-to-end supply chain visibility."
-  ],
-  "projects_bullet": "Hands-on projects include sales forecasting, customer segmentation, conversion funnel analysis, demand planning, inventory optimization, logistics performance tracking, and supplier evaluation. You will also leverage <b>GenAI</b> for automated insights, predictive analytics, and conversational dashboards (projects revealed during placement training).",
-  "final_sentence": "You will apply <b>SQL, Statistics, Machine Learning, and GenAI</b> to <b>e-commerce platforms and supply chain systems</b>, preparing you for high-impact analytics roles across these domains."
-}}
-
 NOW GENERATE for: {domain_str}
 Match the style above with proper <b> tags. Return ONLY valid JSON."""
 
@@ -201,11 +187,7 @@ def get_table_data_with_rowspan(selected_domains):
 # ==========================================
 # PDF HELPER FUNCTIONS
 # ==========================================
-
-# REMOVED: draw_outer_border() — no longer called on pages 1 & 2
-
 def draw_header_no_line(c, page_width, page_height):
-    """Draw header image only — no border, no underline."""
     header_path = "assets/header.png"
     if not os.path.exists(header_path):
         c.setFillColor(colors.red)
@@ -225,14 +207,13 @@ def draw_header_no_line(c, page_width, page_height):
         y_pos = page_height - header_height - 10
         c.drawImage(header_path, x_pos, y_pos, width=header_width, height=header_height,
                     preserveAspectRatio=True, mask='auto')
-        # ── REMOVED: the horizontal line that was drawn below the header ──
         return header_height + 30
     except Exception as e:
         return 100
 
 
 # ==========================================
-# PAGE 1
+# PAGE 1 — PDF
 # ==========================================
 def create_page1(c, name, status, ai_content):
     page_width, page_height = A4
@@ -240,7 +221,6 @@ def create_page1(c, name, status, ai_content):
     R = page_width - MARGINS['right']
     W = R - L
 
-    # ── REMOVED: draw_outer_border() call ──
     header_space = draw_header_no_line(c, page_width, page_height)
     y = page_height - header_space - 15
 
@@ -248,7 +228,6 @@ def create_page1(c, name, status, ai_content):
     style_bullet = ParagraphStyle('Bullet', parent=style_normal, leftIndent=7, firstLineIndent=-7, leading=13)
 
     c.setFillColor(colors.black)
-
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, f"Hi {name},")
     y -= 14
@@ -364,8 +343,7 @@ def create_page1(c, name, status, ai_content):
         p.drawOn(c, L, y - h)
         y -= (h + 8)
 
-    final_sentence = ai_content.get('final_sentence',
-        "You will apply SQL, Statistics, Machine Learning, and GenAI to finance and supply chain datasets.")
+    final_sentence = ai_content.get('final_sentence', "")
     if final_sentence:
         p_final = Paragraph(final_sentence, style_normal)
         _, fh = p_final.wrap(W, 140)
@@ -374,11 +352,10 @@ def create_page1(c, name, status, ai_content):
 
 
 # ==========================================
-# PAGE 2
+# PAGE 2 — PDF
 # ==========================================
 def create_page2(c, ai_content, table_rows, domain_rowspan_map):
     page_width, page_height = A4
-    # ── REMOVED: draw_outer_border() call ──
     header_space = draw_header_no_line(c, page_width, page_height)
     L = MARGINS['left']
     R = page_width - MARGINS['right']
@@ -389,7 +366,6 @@ def create_page2(c, ai_content, table_rows, domain_rowspan_map):
     style_heading = ParagraphStyle('Heading', fontName='Times-Bold', fontSize=11, leading=13, alignment=TA_LEFT)
 
     c.setFillColor(colors.black)
-
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Our Customized Services for you:")
     y -= 14
@@ -507,10 +483,8 @@ def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, o
     buffer2.seek(0)
 
     writer = PdfWriter()
-
     reader1 = PdfReader(buffer1)
     writer.add_page(reader1.pages[0])
-
     reader2 = PdfReader(buffer2)
     writer.add_page(reader2.pages[0])
 
@@ -530,6 +504,423 @@ def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, o
 
 
 # ==========================================
+# DOCX HELPER — set cell border
+# ==========================================
+def set_cell_border(cell, top=None, bottom=None, left=None, right=None):
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    tcBorders = OxmlElement('w:tcBorders')
+    for side, val in [('top', top), ('bottom', bottom), ('left', left), ('right', right)]:
+        if val:
+            el = OxmlElement(f'w:{side}')
+            el.set(qn('w:val'), val.get('val', 'single'))
+            el.set(qn('w:sz'), str(val.get('sz', 4)))
+            el.set(qn('w:color'), val.get('color', '000000'))
+            tcBorders.append(el)
+    tcPr.append(tcBorders)
+
+
+def set_cell_bg(cell, hex_color):
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), hex_color)
+    tcPr.append(shd)
+
+
+def add_bold_run(para, text, size_pt=11, color_hex=None):
+    run = para.add_run(text)
+    run.bold = True
+    run.font.size = Pt(size_pt)
+    if color_hex:
+        run.font.color.rgb = RGBColor.from_string(color_hex)
+    return run
+
+
+def add_run(para, text, bold=False, size_pt=11, italic=False):
+    run = para.add_run(text)
+    run.bold = bold
+    run.italic = italic
+    run.font.size = Pt(size_pt)
+    return run
+
+
+def parse_bold_text(para, html_text, size_pt=11):
+    """Parse <b>...</b> tags and add runs with correct bold formatting."""
+    import re
+    parts = re.split(r'(<b>.*?</b>)', html_text)
+    for part in parts:
+        if part.startswith('<b>') and part.endswith('</b>'):
+            inner = part[3:-4]
+            r = para.add_run(inner)
+            r.bold = True
+            r.font.size = Pt(size_pt)
+        else:
+            clean = part.replace('</b>', '').replace('<b>', '')
+            if clean:
+                r = para.add_run(clean)
+                r.bold = False
+                r.font.size = Pt(size_pt)
+
+
+# ==========================================
+# WORD DOCUMENT GENERATION
+# ==========================================
+def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, output_path):
+    doc = Document()
+
+    # ── Page setup: A4, margins matching PDF ──
+    section = doc.sections[0]
+    section.page_width  = Cm(21)
+    section.page_height = Cm(29.7)
+    section.left_margin   = Cm(1.8)
+    section.right_margin  = Cm(1.8)
+    section.top_margin    = Cm(1.2)
+    section.bottom_margin = Cm(1.8)
+
+    # ── Default style ──
+    style = doc.styles['Normal']
+    style.font.name = 'Times New Roman'
+    style.font.size = Pt(11)
+
+    # ── HEADER IMAGE ──
+    header_path = "assets/header.png"
+    if os.path.exists(header_path):
+        header_para = doc.add_paragraph()
+        header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = header_para.add_run()
+        run.add_picture(header_path, width=Inches(6.5))
+        header_para.paragraph_format.space_after = Pt(6)
+
+    # ── Divider line ──
+    div_para = doc.add_paragraph()
+    div_para.paragraph_format.space_before = Pt(0)
+    div_para.paragraph_format.space_after = Pt(8)
+    pPr = div_para._p.get_or_add_pPr()
+    pBdr = OxmlElement('w:pBdr')
+    bottom_bdr = OxmlElement('w:bottom')
+    bottom_bdr.set(qn('w:val'), 'single')
+    bottom_bdr.set(qn('w:sz'), '6')
+    bottom_bdr.set(qn('w:color'), '000000')
+    pBdr.append(bottom_bdr)
+    pPr.append(pBdr)
+
+    # ── Hi name ──
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(6)
+    add_bold_run(p, f"Hi {name},")
+
+    # ── Intro paragraph ──
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(8)
+    parse_bold_text(p,
+        "Our Senior Data Scientist <b>Mr. Subramani</b>, has shared with you the prescription "
+        "based on your recent consultation to join our "
+        "<b>Nationwide Data Analytics Training and Placement Program 2025</b>."
+    )
+
+    # ── About Us ──
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(4)
+    add_bold_run(p, "About Us")
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(8)
+    parse_bold_text(p,
+        "At <b>Analytics Avenue and Advanced Analytics</b>, we are a team of "
+        "<b>Data Scientists, Data Engineers, and BI Developers</b> throughout India "
+        "across various MNCs joined together to keep a pause for unemployment and "
+        "empowered <b>500+ professionals</b> in the past year, enabling them to "
+        "transition into various <b>Data Analytics roles</b>."
+    )
+
+    # ── Instruction line ──
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(8)
+    add_bold_run(p, "Below you can find the career road map, Key outcomes & suggestions given by our Data Scientist")
+
+    # ── Details table ──
+    details = [
+        ("Name", name),
+        ("Status", status),
+        ("Technologies Needed", "SQL, Python, Statistics, Power BI, Machine Learning, Gen AI"),
+        ("Sectors Covered", ai_content.get('domains_title', 'Finance & Supply Chain'))
+    ]
+    det_table = doc.add_table(rows=len(details), cols=3)
+    det_table.style = 'Table Grid'
+    det_table.alignment = WD_TABLE_ALIGNMENT.LEFT
+    col_w = [Cm(4.5), Cm(0.5), Cm(11)]
+    for i, (label, value) in enumerate(details):
+        row = det_table.rows[i]
+        row.cells[0].width = Cm(4.5)
+        row.cells[1].width = Cm(0.5)
+        row.cells[2].width = Cm(11)
+        p0 = row.cells[0].paragraphs[0]
+        add_bold_run(p0, label)
+        p1 = row.cells[1].paragraphs[0]
+        add_bold_run(p1, ":")
+        p2 = row.cells[2].paragraphs[0]
+        add_run(p2, value)
+        for cell in row.cells:
+            cell.paragraphs[0].paragraph_format.space_before = Pt(2)
+            cell.paragraphs[0].paragraph_format.space_after = Pt(2)
+            # remove borders for clean look matching PDF
+            set_cell_border(cell,
+                top={'val': 'none'}, bottom={'val': 'none'},
+                left={'val': 'none'}, right={'val': 'none'}
+            )
+    doc.add_paragraph().paragraph_format.space_after = Pt(4)
+
+    # ── Career Roadmap ──
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(4)
+    add_bold_run(p, "Career Roadmap")
+
+    roadmap = [
+        "Step 1 → Learn Tools (SQL, Python, Statistics, Power BI, Machine Learning, Gen AI)",
+        "Step 2 → Domain-Specific Projects",
+        "Step 3 → Role Readiness (interviews, placement support)"
+    ]
+    for step in roadmap:
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(2)
+        add_run(p, step)
+
+    sp = doc.add_paragraph()
+    sp.paragraph_format.space_after = Pt(4)
+
+    # ── Key Outcomes ──
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(4)
+    add_bold_run(p, "Key Outcomes")
+
+    outcomes = [
+        "Data Analysis Skills (SQL, Python, Visualization, Statistics)",
+        "Data Engineer Skills (Cloud, SQL, Python, Data Warehousing, ETL orchestration)",
+        "Machine Learning & Gen AI (LLMs, Prompt Engineering, RAG Pipelines, Embeddings, Vector Databases, Fine-Tuning & Deployment)",
+        f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')} etc.)",
+        "Recreate Industrial Standard projects worked by our Data Scientists",
+        "Placement opportunities, Organic job calls and referral drives"
+    ]
+    for item in outcomes:
+        p = doc.add_paragraph(style='List Bullet')
+        p.paragraph_format.space_after = Pt(2)
+        add_run(p, item)
+
+    sp = doc.add_paragraph()
+    sp.paragraph_format.space_after = Pt(4)
+
+    # ── Prescription ──
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(6)
+    add_bold_run(p, "Prescription:")
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(6)
+    parse_bold_text(p, ai_content.get('intro_line', ''))
+
+    for b_text in ai_content.get('domain_bullets', []):
+        if b_text.strip():
+            p = doc.add_paragraph(style='List Bullet')
+            p.paragraph_format.space_after = Pt(3)
+            parse_bold_text(p, b_text)
+
+    projects = ai_content.get('projects_bullet', '')
+    if projects:
+        p = doc.add_paragraph(style='List Bullet')
+        p.paragraph_format.space_after = Pt(3)
+        parse_bold_text(p, projects)
+
+    final = ai_content.get('final_sentence', '')
+    if final:
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(10)
+        parse_bold_text(p, final)
+
+    # ── PAGE BREAK ──
+    doc.add_page_break()
+
+    # ── Header image page 2 ──
+    if os.path.exists(header_path):
+        header_para = doc.add_paragraph()
+        header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = header_para.add_run()
+        run.add_picture(header_path, width=Inches(6.5))
+        header_para.paragraph_format.space_after = Pt(6)
+
+    div_para2 = doc.add_paragraph()
+    div_para2.paragraph_format.space_before = Pt(0)
+    div_para2.paragraph_format.space_after = Pt(8)
+    pPr2 = div_para2._p.get_or_add_pPr()
+    pBdr2 = OxmlElement('w:pBdr')
+    b2 = OxmlElement('w:bottom')
+    b2.set(qn('w:val'), 'single')
+    b2.set(qn('w:sz'), '6')
+    b2.set(qn('w:color'), '000000')
+    pBdr2.append(b2)
+    pPr2.append(pBdr2)
+
+    # ── Customized Services ──
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(6)
+    add_bold_run(p, "Our Customized Services for you:")
+
+    svc_headers = ["Service", "Details"]
+    svc_rows = [
+        ("1. Industry-Relevant Projects",
+         f"Work on 3 projects across {ai_content['domains_title']}, focusing on data modeling, EDA, Machine Learning, and GenAI for forecasting, cost optimization, anomaly detection, and decision support."),
+        ("2. Secret Job Portals Access",
+         "Setup and optimize your profile on 9 exclusive job portals to help you receive organic job calls"),
+        ("3. Interview Preparation Materials",
+         "Lifetime access to interview notes, preparation guides, and materials prepared by top Data Scientists in real interview scenarios"),
+        ("4. Monthly In-Person Training",
+         "Attend monthly in-house classroom sessions (1 weekend per month) for revision, rapid preparation, and mentorship from experienced professionals"),
+    ]
+
+    svc_table = doc.add_table(rows=1 + len(svc_rows), cols=2)
+    svc_table.style = 'Table Grid'
+    svc_table.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+    # Header row
+    hrow = svc_table.rows[0]
+    hrow.cells[0].width = Cm(5)
+    hrow.cells[1].width = Cm(11)
+    h0 = hrow.cells[0].paragraphs[0]
+    add_bold_run(h0, "Service")
+    h1 = hrow.cells[1].paragraphs[0]
+    add_bold_run(h1, "Details")
+
+    for i, (svc, detail) in enumerate(svc_rows):
+        row = svc_table.rows[i + 1]
+        row.cells[0].width = Cm(5)
+        row.cells[1].width = Cm(11)
+        p0 = row.cells[0].paragraphs[0]
+        add_bold_run(p0, svc)
+        p1 = row.cells[1].paragraphs[0]
+        add_run(p1, detail)
+        for cell in row.cells:
+            cell.paragraphs[0].paragraph_format.space_before = Pt(4)
+            cell.paragraphs[0].paragraph_format.space_after = Pt(4)
+
+    sp = doc.add_paragraph()
+    sp.paragraph_format.space_after = Pt(8)
+
+    # ── Career Prescription Table title ──
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(2)
+    add_bold_run(p, f"{ai_content['domains_title']} – Career Prescription Table")
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(6)
+    r = p.add_run("(Actual projects will be revealed during placement training)")
+    r.italic = True
+    r.font.size = Pt(10)
+
+    # ── Career Table ──
+    career_headers = ["Domain", "Role", "Exciting Challenge", "Key Technical Skills", "Targeted Companies"]
+    total_rows = 1 + len(table_rows)
+    ct = doc.add_table(rows=total_rows, cols=5)
+    ct.style = 'Table Grid'
+    ct.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+    col_widths_cm = [3.0, 2.5, 4.2, 3.4, 3.6]
+
+    # Header
+    hr = ct.rows[0]
+    for j, hdr in enumerate(career_headers):
+        cell = hr.cells[j]
+        cell.width = Cm(col_widths_cm[j])
+        ph = cell.paragraphs[0]
+        add_bold_run(ph, hdr, size_pt=10)
+        cell.paragraphs[0].paragraph_format.space_before = Pt(3)
+        cell.paragraphs[0].paragraph_format.space_after = Pt(3)
+
+    # Data rows
+    processed_domains_docx = {}
+    full_domain_rowspan_docx = {}
+    for row_data in table_rows:
+        fd = row_data[0]
+        if fd not in full_domain_rowspan_docx:
+            full_domain_rowspan_docx[fd] = 1
+        else:
+            full_domain_rowspan_docx[fd] += 1
+
+    current_row_idx = 1
+    domain_start_idx = {}
+    for row_data in table_rows:
+        fd = row_data[0]
+        row = ct.rows[current_row_idx]
+        for j in range(5):
+            row.cells[j].width = Cm(col_widths_cm[j])
+
+        # Domain cell
+        if fd not in domain_start_idx:
+            domain_start_idx[fd] = current_row_idx
+            pd = row.cells[0].paragraphs[0]
+            add_bold_run(pd, fd, size_pt=10)
+
+        for j, val in enumerate(row_data[1:], start=1):
+            pc = row.cells[j].paragraphs[0]
+            add_run(pc, str(val), size_pt=10)
+
+        for j in range(5):
+            row.cells[j].paragraphs[0].paragraph_format.space_before = Pt(3)
+            row.cells[j].paragraphs[0].paragraph_format.space_after = Pt(3)
+
+        current_row_idx += 1
+
+    # Merge domain cells vertically
+    for fd, start_idx in domain_start_idx.items():
+        span = full_domain_rowspan_docx[fd]
+        if span > 1:
+            end_idx = start_idx + span - 1
+            ct.cell(start_idx, 0).merge(ct.cell(end_idx, 0))
+            merged_cell = ct.cell(start_idx, 0)
+            merged_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+    doc.save(output_path)
+    return True, None
+
+
+# ==========================================
+# SEND MAIL FUNCTION
+# ==========================================
+def send_mail_with_pdf(to_email, cc_emails, subject, body, pdf_path, candidate_name):
+    if not GMAIL_USER or not GMAIL_PASSWORD:
+        return False, "Gmail credentials not configured in Streamlit secrets (GMAIL_USER, GMAIL_PASSWORD)"
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = GMAIL_USER
+        msg['To'] = to_email
+        if cc_emails:
+            msg['Cc'] = ", ".join(cc_emails)
+        msg['Subject'] = subject
+
+        msg.attach(MIMEText(body, 'plain'))
+
+        with open(pdf_path, 'rb') as f:
+            pdf_attachment = MIMEApplication(f.read(), _subtype='pdf')
+            pdf_attachment.add_header(
+                'Content-Disposition', 'attachment',
+                filename=os.path.basename(pdf_path)
+            )
+            msg.attach(pdf_attachment)
+
+        all_recipients = [to_email] + (cc_emails if cc_emails else [])
+
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(GMAIL_USER, GMAIL_PASSWORD)
+            server.sendmail(GMAIL_USER, all_recipients, msg.as_string())
+
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+# ==========================================
 # STREAMLIT UI
 # ==========================================
 st.set_page_config(page_title="Analytics Avenue Generator", layout="wide")
@@ -537,193 +928,48 @@ st.set_page_config(page_title="Analytics Avenue Generator", layout="wide")
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif !important;
-    }
-
-    .block-container {
-        padding-top: 2rem !important;
-        padding-left: 3rem !important;
-        padding-right: 3rem !important;
-        max-width: 100% !important;
-    }
-
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
+    .block-container { padding-top: 2rem !important; padding-left: 3rem !important; padding-right: 3rem !important; max-width: 100% !important; }
     #MainMenu, footer, header { visibility: hidden; }
-
-    .brand-wrap {
-        display: flex;
-        align-items: center;
-        gap: 18px;
-        margin-bottom: 28px;
-    }
-    .brand-name {
-        font-size: 26px;
-        font-weight: 800;
-        color: #064b86;
-        line-height: 1.3;
-    }
-    .divider {
-        border: none;
-        border-top: 2px solid #e0e0e0;
-        margin: 0 0 32px 0;
-    }
-
-    h1 {
-        font-size: 48px !important;
-        font-weight: 900 !important;
-        color: #0a0a0a !important;
-        letter-spacing: -1px !important;
-        line-height: 1.1 !important;
-        margin-bottom: 6px !important;
-    }
-
-    .subtitle {
-        font-size: 17px;
-        font-weight: 500;
-        color: #555;
-        margin-bottom: 36px;
-    }
-
-    h2 {
-        font-size: 30px !important;
-        font-weight: 800 !important;
-        color: #0a0a0a !important;
-        margin-bottom: 16px !important;
-    }
-    h3 {
-        font-size: 22px !important;
-        font-weight: 700 !important;
-        color: #0a0a0a !important;
-        margin-bottom: 12px !important;
-    }
-
-    .card {
-        background: #fff;
-        border: 1.5px solid #e5e7eb;
-        border-radius: 10px;
-        padding: 24px 28px;
-        margin-bottom: 20px;
-    }
-    .card-label {
-        font-size: 13px;
-        font-weight: 700;
-        color: #064b86;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 8px;
-    }
-    .card-text {
-        font-size: 16px;
-        font-weight: 500;
-        color: #222;
-        line-height: 1.7;
-    }
-    .card ul {
-        margin: 0;
-        padding-left: 18px;
-    }
-    .card ul li {
-        font-size: 15px;
-        font-weight: 500;
-        color: #333;
-        margin-bottom: 6px;
-        line-height: 1.6;
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0px;
-        border-bottom: 2px solid #e0e0e0;
-        margin-bottom: 32px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        font-size: 16px !important;
-        font-weight: 600 !important;
-        color: #555 !important;
-        padding: 12px 28px !important;
-        border: none !important;
-        background: transparent !important;
-    }
-    .stTabs [aria-selected="true"] {
-        color: #064b86 !important;
-        font-weight: 800 !important;
-        border-bottom: 3px solid #064b86 !important;
-    }
-
-    .stTextInput label,
-    .stSelectbox label,
-    .stMultiSelect label {
-        font-size: 15px !important;
-        font-weight: 700 !important;
-        color: #0a0a0a !important;
-        letter-spacing: 0.3px !important;
-    }
-
-    .stTextInput input {
-        font-size: 16px !important;
-        font-weight: 500 !important;
-        padding: 12px 14px !important;
-        border: 1.5px solid #d0d7de !important;
-        border-radius: 6px !important;
-        background: #fff !important;
-    }
-
-    .stFormSubmitButton > button {
-        background-color: #064b86 !important;
-        color: #fff !important;
-        font-size: 17px !important;
-        font-weight: 700 !important;
-        padding: 14px 36px !important;
-        border-radius: 6px !important;
-        border: none !important;
-        letter-spacing: 0.3px !important;
-        margin-top: 12px !important;
-        width: auto !important;
-    }
-    .stFormSubmitButton > button:hover {
-        background-color: #053d70 !important;
-    }
-
-    .stDownloadButton > button {
-        background-color: #1a7f37 !important;
-        color: #fff !important;
-        font-size: 16px !important;
-        font-weight: 700 !important;
-        padding: 12px 28px !important;
-        border-radius: 6px !important;
-        border: none !important;
-    }
-
-    .stAlert p {
-        font-size: 15px !important;
-        font-weight: 600 !important;
-    }
-
-    .streamlit-expanderHeader p {
-        font-size: 17px !important;
-        font-weight: 700 !important;
-        color: #0a0a0a !important;
-    }
+    .brand-wrap { display: flex; align-items: center; gap: 18px; margin-bottom: 28px; }
+    .brand-name { font-size: 26px; font-weight: 800; color: #064b86; line-height: 1.3; }
+    .divider { border: none; border-top: 2px solid #e0e0e0; margin: 0 0 32px 0; }
+    h1 { font-size: 48px !important; font-weight: 900 !important; color: #0a0a0a !important; letter-spacing: -1px !important; line-height: 1.1 !important; margin-bottom: 6px !important; }
+    .subtitle { font-size: 17px; font-weight: 500; color: #555; margin-bottom: 36px; }
+    h2 { font-size: 30px !important; font-weight: 800 !important; color: #0a0a0a !important; margin-bottom: 16px !important; }
+    h3 { font-size: 22px !important; font-weight: 700 !important; color: #0a0a0a !important; margin-bottom: 12px !important; }
+    .card { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 10px; padding: 24px 28px; margin-bottom: 20px; }
+    .card-label { font-size: 13px; font-weight: 700; color: #064b86; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .card-text { font-size: 16px; font-weight: 500; color: #222; line-height: 1.7; }
+    .card ul { margin: 0; padding-left: 18px; }
+    .card ul li { font-size: 15px; font-weight: 500; color: #333; margin-bottom: 6px; line-height: 1.6; }
+    .stTabs [data-baseweb="tab-list"] { gap: 0px; border-bottom: 2px solid #e0e0e0; margin-bottom: 32px; }
+    .stTabs [data-baseweb="tab"] { font-size: 16px !important; font-weight: 600 !important; color: #555 !important; padding: 12px 28px !important; border: none !important; background: transparent !important; }
+    .stTabs [aria-selected="true"] { color: #064b86 !important; font-weight: 800 !important; border-bottom: 3px solid #064b86 !important; }
+    .stTextInput label, .stSelectbox label, .stMultiSelect label { font-size: 15px !important; font-weight: 700 !important; color: #0a0a0a !important; letter-spacing: 0.3px !important; }
+    .stTextInput input { font-size: 16px !important; font-weight: 500 !important; padding: 12px 14px !important; border: 1.5px solid #d0d7de !important; border-radius: 6px !important; background: #fff !important; }
+    .stFormSubmitButton > button { background-color: #064b86 !important; color: #fff !important; font-size: 17px !important; font-weight: 700 !important; padding: 14px 36px !important; border-radius: 6px !important; border: none !important; letter-spacing: 0.3px !important; margin-top: 12px !important; width: auto !important; }
+    .stFormSubmitButton > button:hover { background-color: #053d70 !important; }
+    .stDownloadButton > button { background-color: #1a7f37 !important; color: #fff !important; font-size: 16px !important; font-weight: 700 !important; padding: 12px 28px !important; border-radius: 6px !important; border: none !important; }
+    .stAlert p { font-size: 15px !important; font-weight: 600 !important; }
+    .streamlit-expanderHeader p { font-size: 17px !important; font-weight: 700 !important; color: #0a0a0a !important; }
+    .mail-box { background: #f0f6ff; border: 1.5px solid #bed0f7; border-radius: 10px; padding: 22px 26px; margin-top: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── BRAND HEADER ─────────────────────────────────────────
+# ── BRAND HEADER ──
 logo_url = "https://raw.githubusercontent.com/Analytics-Avenue/streamlit-dataapp/main/logo.png"
 st.markdown(f"""
 <div class="brand-wrap">
     <img src="{logo_url}" width="64" style="border-radius:8px;">
-    <div class="brand-name">
-        Analytics Avenue &amp;<br>Advanced Analytics
-    </div>
+    <div class="brand-name">Analytics Avenue &amp;<br>Advanced Analytics</div>
 </div>
 <hr class="divider">
 """, unsafe_allow_html=True)
 
-# ── PAGE TITLE ───────────────────────────────────────────
 st.title("🤖 AI Prescription Generator")
 st.markdown('<p class="subtitle">Generate a personalised data career prescription powered by AI</p>', unsafe_allow_html=True)
 
-# ── TABS ─────────────────────────────────────────────────
 tab1, tab2 = st.tabs(["Overview", "Application"])
 
 # ════════════════════════════════════════════════════════
@@ -731,55 +977,45 @@ tab1, tab2 = st.tabs(["Overview", "Application"])
 # ════════════════════════════════════════════════════════
 with tab1:
     st.header("Overview")
-
     st.markdown("""
     <div class="card">
         <div class="card-label">Purpose</div>
         <div class="card-text">
             Generate personalised, AI-powered career prescriptions for aspiring data professionals —
             combining Groq LLaMA 3.3 70B intelligence with domain-specific career templates to produce
-            a structured 3-page PDF roadmap covering skills, projects, roles, and targeted companies.
+            a structured 3-page PDF and editable Word document covering skills, projects, roles, and targeted companies.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     col1, col2 = st.columns(2, gap="large")
-
     with col1:
         st.subheader("Capabilities")
         st.markdown("""
-        <div class="card">
-            <ul>
-                <li>Supports 9 domains — Finance, Healthcare, Supply Chain, E-Commerce, HR Analytics, Automobile, Manufacturing, Retail, and Cyber Security.</li>
-                <li>AI generates personalised prescription text with domain-specific bullets using Groq LLaMA 3.3 70B.</li>
-                <li>Produces a professional 3-page PDF with header, career table, services table, and reveal box.</li>
-                <li>Career table includes roles, challenges, key skills, and targeted companies per domain.</li>
-                <li>Page 3 merges from a template PDF with consistent border across all 3 pages.</li>
-                <li>Download ready — PDF generated instantly with student name and timestamp.</li>
-            </ul>
-        </div>
+        <div class="card"><ul>
+            <li>Supports 9 domains — Finance, Healthcare, Supply Chain, E-Commerce, HR Analytics, Automobile, Manufacturing, Retail, and Cyber Security.</li>
+            <li>AI generates personalised prescription text with domain-specific bullets using Groq LLaMA 3.3 70B.</li>
+            <li>Download as PDF (3 pages) or editable Word (.docx) document.</li>
+            <li>Send the prescription directly to the candidate's email with CC support.</li>
+            <li>Career table includes roles, challenges, key skills, and targeted companies per domain.</li>
+        </ul></div>
         """, unsafe_allow_html=True)
-
     with col2:
         st.subheader("Business Impact")
         st.markdown("""
-        <div class="card">
-            <ul>
-                <li>Replace manual prescription writing — generate tailored career documents in seconds.</li>
-                <li>Deliver consistent, professional-grade prescriptions to every prospective student.</li>
-                <li>Showcase domain expertise and placement support in a branded PDF format.</li>
-                <li>Scale across hundreds of consultations without additional effort from the team.</li>
-                <li>Increase conversion by giving prospects a tangible, personalised career roadmap.</li>
-            </ul>
-        </div>
+        <div class="card"><ul>
+            <li>Replace manual prescription writing — generate tailored career documents in seconds.</li>
+            <li>Deliver consistent, professional-grade prescriptions to every prospective student.</li>
+            <li>Send directly to candidates via email without leaving the app.</li>
+            <li>Word export lets consultants make last-minute edits before sharing.</li>
+            <li>Scale across hundreds of consultations without additional effort.</li>
+        </ul></div>
         """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════
 # TAB 2 — APPLICATION
 # ════════════════════════════════════════════════════════
 with tab2:
-
-    # Asset check
     header_ok = os.path.exists("assets/header.png")
     template_ok = os.path.exists("assets/template.pdf")
     if not (header_ok and template_ok):
@@ -796,7 +1032,6 @@ with tab2:
             name = st.text_input("Name *", placeholder="e.g. Student Name")
         with col2:
             status = st.selectbox("Status *", ["Working Professional", "Student", "Job Seeker"])
-
         domains = st.multiselect(
             "Target Domains *",
             ["Finance", "Supply Chain", "Healthcare", "HR Analytics", "E-Commerce",
@@ -825,30 +1060,136 @@ with tab2:
                 with st.spinner("📊 Building career table..."):
                     table_rows, domain_rowspan_map = get_table_data_with_rowspan(domains)
 
-                with st.spinner("📄 Creating PDF..."):
+                with st.spinner("📄 Creating PDF & Word document..."):
                     ts = int(time.time())
                     safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '_')]).rstrip()
-                    filename = f"Prescription_{safe_name.replace(' ', '_')}_{ts}.pdf"
-                    output_path = f"output/{filename}"
+                    base_name = f"Prescription_{safe_name.replace(' ', '_')}_{ts}"
                     os.makedirs("output", exist_ok=True)
 
-                    success, error_msg = create_final_pdf(
-                        name, status, ai_content, table_rows, domain_rowspan_map, output_path
-                    )
+                    pdf_path  = f"output/{base_name}.pdf"
+                    docx_path = f"output/{base_name}.docx"
 
-                if success:
+                    pdf_ok, pdf_err   = create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, pdf_path)
+                    docx_ok, docx_err = create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, docx_path)
+
+                if pdf_ok or docx_ok:
                     st.success("✅ Prescription Generated Successfully!")
-                    with open(output_path, "rb") as f:
-                        st.download_button(
-                            "⬇️ Download PDF",
-                            f,
-                            file_name=filename,
-                            mime="application/pdf"
+
+                    # ── Download buttons side by side ──
+                    dl_col1, dl_col2, dl_col3 = st.columns([2, 2, 3])
+                    with dl_col1:
+                        if pdf_ok:
+                            with open(pdf_path, "rb") as f:
+                                st.download_button(
+                                    "⬇️ Download PDF",
+                                    f, file_name=f"{base_name}.pdf",
+                                    mime="application/pdf"
+                                )
+                        else:
+                            st.error(f"PDF Error: {pdf_err}")
+
+                    with dl_col2:
+                        if docx_ok:
+                            with open(docx_path, "rb") as f:
+                                st.download_button(
+                                    "📝 Download Word (.docx)",
+                                    f, file_name=f"{base_name}.docx",
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                )
+                        else:
+                            st.error(f"Word Error: {docx_err}")
+
+                    # ── SEND MAIL SECTION ──
+                    st.markdown("---")
+                    st.subheader("📧 Send Prescription by Email")
+
+                    with st.expander("✉️ Click here to send mail", expanded=False):
+                        st.markdown('<div class="mail-box">', unsafe_allow_html=True)
+
+                        mail_to = st.text_input("To *", placeholder="candidate@email.com", key="mail_to")
+
+                        st.markdown("**CC** (add one per line or comma-separated)")
+                        cc_raw = st.text_area(
+                            "CC Email Addresses",
+                            placeholder="manager@analyticsavenue.in\nteam@analyticsavenue.in",
+                            height=90,
+                            key="mail_cc",
+                            label_visibility="collapsed"
                         )
+
+                        mail_subject = st.text_input(
+                            "Subject",
+                            value=f"Your Career Prescription – Analytics Avenue & Advanced Analytics",
+                            key="mail_subject"
+                        )
+
+                        default_body = f"""Dear {name},
+
+Thank you for your recent consultation with Analytics Avenue & Advanced Analytics.
+
+As discussed, please find attached your personalised Career Prescription prepared by our Senior Data Scientist Mr. Subramani. This document outlines your tailored roadmap, key outcomes, and domain-specific career opportunities in {ai_content.get('domains_title', 'Data Analytics')}.
+
+Your prescription covers:
+• Customised career roadmap across {ai_content.get('domains_title', '')}
+• Key technical skills: SQL, Python, Statistics, Power BI, Machine Learning, Gen AI
+• Industry-relevant projects and placement support
+
+To take the next step, please register and pay the initial ₹5,000 to block your seat:
+Payment Link: https://pages.razorpay.com/OpenAnalyticsAvenue
+UPI: aard@uco
+
+Feel free to reach out for any queries.
+
+Warm regards,
+Data Consultant
+Analytics Avenue & Advanced Analytics
+Ph / WhatsApp: 9677298268
+Email: supportteam@analyticsavenue.in"""
+
+                        mail_body = st.text_area(
+                            "Email Body",
+                            value=default_body,
+                            height=320,
+                            key="mail_body"
+                        )
+
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+                        send_clicked = st.button("📤 Send Mail", type="primary", key="send_mail_btn")
+
+                        if send_clicked:
+                            if not mail_to.strip():
+                                st.error("❌ Please enter a To email address")
+                            else:
+                                # Parse CC addresses
+                                cc_list = []
+                                if cc_raw.strip():
+                                    raw_entries = cc_raw.replace(',', '\n').split('\n')
+                                    cc_list = [e.strip() for e in raw_entries if e.strip()]
+
+                                with st.spinner("📨 Sending email..."):
+                                    mail_ok, mail_err = send_mail_with_pdf(
+                                        to_email=mail_to.strip(),
+                                        cc_emails=cc_list,
+                                        subject=mail_subject,
+                                        body=mail_body,
+                                        pdf_path=pdf_path,
+                                        candidate_name=name
+                                    )
+
+                                if mail_ok:
+                                    recipients_display = mail_to
+                                    if cc_list:
+                                        recipients_display += f" (CC: {', '.join(cc_list)})"
+                                    st.success(f"✅ Email sent successfully to {recipients_display}!")
+                                else:
+                                    st.error(f"❌ Failed to send email: {mail_err}")
+                                    st.info("💡 Make sure GMAIL_USER and GMAIL_PASSWORD are set in your Streamlit secrets, and that Gmail App Password (not account password) is used.")
+
                     with st.expander("📋 AI Content"):
                         st.json(ai_content)
                     with st.expander("📊 Career Data"):
                         st.write(f"**Roles generated:** {len(table_rows)}")
                         st.write(f"**Domains:** {domain_rowspan_map}")
                 else:
-                    st.error(f"PDF Error: {error_msg}")
+                    st.error("Both PDF and Word generation failed. Please check your assets.")
