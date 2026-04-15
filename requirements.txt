@@ -3,5 +3,7 @@ groq
 reportlab
 Pillow
 pypdf
-
+python-docx
+lxml
+requests
 
