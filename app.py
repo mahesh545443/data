@@ -1024,6 +1024,33 @@ with tab2:
         st.write(f"{'✅' if template_ok else '❌'} template.pdf")
         st.stop()
 
+    # ── Initialise all session_state keys once ──
+    for _k, _v in {
+        "generated":    False,
+        "pdf_path":     "",
+        "docx_path":    "",
+        "base_name":    "",
+        "pdf_ok":       False,
+        "docx_ok":      False,
+        "pdf_err":      "",
+        "docx_err":     "",
+        "ai_content":   {},
+        "table_rows":   [],
+        "domain_map":   {},
+        "cand_name":    "",
+        "mail_to":      "",
+        "mail_cc":      "",
+        "mail_subject": "",
+        "mail_body":    "",
+        "mail_status":  "",   # "" | "sending" | "sent" | "error"
+        "mail_msg":     "",
+    }.items():
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    # ════════════════════════════════
+    # GENERATE FORM
+    # ════════════════════════════════
     st.subheader("Your Details")
 
     with st.form("form"):
@@ -1040,6 +1067,7 @@ with tab2:
         )
         submit = st.form_submit_button("🚀 Generate Prescription")
 
+    # ── On Generate click — do all work and save to session_state ──
     if submit:
         errors = []
         if not name:
@@ -1061,135 +1089,166 @@ with tab2:
                     table_rows, domain_rowspan_map = get_table_data_with_rowspan(domains)
 
                 with st.spinner("📄 Creating PDF & Word document..."):
-                    ts = int(time.time())
+                    ts        = int(time.time())
                     safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '_')]).rstrip()
                     base_name = f"Prescription_{safe_name.replace(' ', '_')}_{ts}"
                     os.makedirs("output", exist_ok=True)
-
                     pdf_path  = f"output/{base_name}.pdf"
                     docx_path = f"output/{base_name}.docx"
-
-                    pdf_ok, pdf_err   = create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, pdf_path)
+                    pdf_ok,  pdf_err  = create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, pdf_path)
                     docx_ok, docx_err = create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, docx_path)
 
-                if pdf_ok or docx_ok:
-                    st.success("✅ Prescription Generated Successfully!")
+                # Build default mail body
+                default_body = (
+                    f"Dear {name},\n\n"
+                    f"Thank you for your recent consultation with Analytics Avenue & Advanced Analytics.\n\n"
+                    f"As discussed, please find attached your personalised Career Prescription prepared by "
+                    f"our Senior Data Scientist Mr. Subramani. This document outlines your tailored roadmap, "
+                    f"key outcomes, and domain-specific career opportunities in "
+                    f"{ai_content.get('domains_title', 'Data Analytics')}.\n\n"
+                    f"Your prescription covers:\n"
+                    f"  \u2022 Customised career roadmap across {ai_content.get('domains_title', '')}\n"
+                    f"  \u2022 Key technical skills: SQL, Python, Statistics, Power BI, Machine Learning, Gen AI\n"
+                    f"  \u2022 Industry-relevant projects and placement support\n\n"
+                    f"To take the next step, please register and pay the initial \u20b95,000 to block your seat:\n"
+                    f"Payment Link: https://pages.razorpay.com/OpenAnalyticsAvenue\n"
+                    f"UPI: aard@uco\n\n"
+                    f"Feel free to reach out for any queries.\n\n"
+                    f"Warm regards,\n"
+                    f"Data Consultant\n"
+                    f"Analytics Avenue & Advanced Analytics\n"
+                    f"Ph / WhatsApp: 9677298268\n"
+                    f"Email: supportteam@analyticsavenue.in"
+                )
 
-                    # ── Download buttons side by side ──
-                    dl_col1, dl_col2, dl_col3 = st.columns([2, 2, 3])
-                    with dl_col1:
-                        if pdf_ok:
-                            with open(pdf_path, "rb") as f:
-                                st.download_button(
-                                    "⬇️ Download PDF",
-                                    f, file_name=f"{base_name}.pdf",
-                                    mime="application/pdf"
-                                )
-                        else:
-                            st.error(f"PDF Error: {pdf_err}")
+                # Save everything to session_state
+                st.session_state["generated"]    = True
+                st.session_state["pdf_path"]     = pdf_path
+                st.session_state["docx_path"]    = docx_path
+                st.session_state["base_name"]    = base_name
+                st.session_state["pdf_ok"]       = pdf_ok
+                st.session_state["docx_ok"]      = docx_ok
+                st.session_state["pdf_err"]      = pdf_err or ""
+                st.session_state["docx_err"]     = docx_err or ""
+                st.session_state["ai_content"]   = ai_content
+                st.session_state["table_rows"]   = table_rows
+                st.session_state["domain_map"]   = domain_rowspan_map
+                st.session_state["cand_name"]    = name
+                # Reset mail fields for new prescription
+                st.session_state["mail_to"]      = ""
+                st.session_state["mail_cc"]      = ""
+                st.session_state["mail_subject"] = "Your Career Prescription \u2013 Analytics Avenue & Advanced Analytics"
+                st.session_state["mail_body"]    = default_body
+                st.session_state["mail_status"]  = ""
+                st.session_state["mail_msg"]     = ""
 
-                    with dl_col2:
-                        if docx_ok:
-                            with open(docx_path, "rb") as f:
-                                st.download_button(
-                                    "📝 Download Word (.docx)",
-                                    f, file_name=f"{base_name}.docx",
-                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                )
-                        else:
-                            st.error(f"Word Error: {docx_err}")
+    # ════════════════════════════════
+    # RESULTS SECTION
+    # always rendered from session_state — survives ANY button click
+    # ════════════════════════════════
+    if st.session_state["generated"]:
+        _pdf_ok   = st.session_state["pdf_ok"]
+        _docx_ok  = st.session_state["docx_ok"]
+        _pdf_path = st.session_state["pdf_path"]
+        _docx_path= st.session_state["docx_path"]
+        _base     = st.session_state["base_name"]
+        _ai       = st.session_state["ai_content"]
+        _rows     = st.session_state["table_rows"]
+        _dmap     = st.session_state["domain_map"]
+        _cname    = st.session_state["cand_name"]
 
-                    # ── SEND MAIL SECTION ──
-                    st.markdown("---")
-                    st.subheader("📧 Send Prescription by Email")
+        st.success("✅ Prescription Generated Successfully!")
 
-                    with st.expander("✉️ Click here to send mail", expanded=False):
-                        st.markdown('<div class="mail-box">', unsafe_allow_html=True)
+        # ── Download buttons ──
+        dl_col1, dl_col2, _ = st.columns([2, 2, 3])
+        with dl_col1:
+            if _pdf_ok and os.path.exists(_pdf_path):
+                with open(_pdf_path, "rb") as f:
+                    st.download_button(
+                        "⬇️ Download PDF", f,
+                        file_name=f"{_base}.pdf",
+                        mime="application/pdf",
+                        key="dl_pdf"
+                    )
+            else:
+                st.error(f"PDF Error: {st.session_state['pdf_err']}")
 
-                        mail_to = st.text_input("To *", placeholder="candidate@email.com", key="mail_to")
+        with dl_col2:
+            if _docx_ok and os.path.exists(_docx_path):
+                with open(_docx_path, "rb") as f:
+                    st.download_button(
+                        "📝 Download Word (.docx)", f,
+                        file_name=f"{_base}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="dl_docx"
+                    )
+            else:
+                st.error(f"Word Error: {st.session_state['docx_err']}")
 
-                        st.markdown("**CC** (add one per line or comma-separated)")
-                        cc_raw = st.text_area(
-                            "CC Email Addresses",
-                            placeholder="manager@analyticsavenue.in\nteam@analyticsavenue.in",
-                            height=90,
-                            key="mail_cc",
-                            label_visibility="collapsed"
-                        )
+        # ════════════════════════════════
+        # SEND MAIL SECTION
+        # ════════════════════════════════
+        st.markdown("---")
+        st.subheader("📧 Send Prescription by Email")
 
-                        mail_subject = st.text_input(
-                            "Subject",
-                            value=f"Your Career Prescription – Analytics Avenue & Advanced Analytics",
-                            key="mail_subject"
-                        )
+        st.markdown('<div class="mail-box">', unsafe_allow_html=True)
 
-                        default_body = f"""Dear {name},
+        mc1, mc2 = st.columns(2, gap="large")
+        with mc1:
+            st.text_input("To *", placeholder="candidate@email.com", key="mail_to")
+        with mc2:
+            st.text_input(
+                "CC (comma-separated)",
+                placeholder="cc1@email.com, cc2@email.com",
+                key="mail_cc"
+            )
 
-Thank you for your recent consultation with Analytics Avenue & Advanced Analytics.
+        st.text_input("Subject", key="mail_subject")
+        st.text_area("Email Body", height=280, key="mail_body")
 
-As discussed, please find attached your personalised Career Prescription prepared by our Senior Data Scientist Mr. Subramani. This document outlines your tailored roadmap, key outcomes, and domain-specific career opportunities in {ai_content.get('domains_title', 'Data Analytics')}.
+        st.markdown('</div>', unsafe_allow_html=True)
 
-Your prescription covers:
-• Customised career roadmap across {ai_content.get('domains_title', '')}
-• Key technical skills: SQL, Python, Statistics, Power BI, Machine Learning, Gen AI
-• Industry-relevant projects and placement support
+        # ── Status banner (persists across reruns) ──
+        if st.session_state["mail_status"] == "sent":
+            st.success(f"✅ {st.session_state['mail_msg']}")
+        elif st.session_state["mail_status"] == "error":
+            st.error(f"❌ {st.session_state['mail_msg']}")
+            st.info("💡 Use a Gmail **App Password** — not your regular Gmail password. "
+                    "Generate one at: myaccount.google.com/apppasswords  |  "
+                    "Then add GMAIL_USER and GMAIL_PASSWORD to Streamlit secrets.")
 
-To take the next step, please register and pay the initial ₹5,000 to block your seat:
-Payment Link: https://pages.razorpay.com/OpenAnalyticsAvenue
-UPI: aard@uco
+        # ── Send button — outside any form so it doesn't clear fields ──
+        if st.button("📤 Send Mail", type="primary", key="send_mail_btn"):
+            _to = st.session_state["mail_to"].strip()
+            if not _to:
+                st.session_state["mail_status"] = "error"
+                st.session_state["mail_msg"]    = "Please enter a To email address."
+            else:
+                _cc_raw  = st.session_state["mail_cc"]
+                _cc_list = [e.strip() for e in _cc_raw.replace(',', '\n').split('\n') if e.strip()] if _cc_raw.strip() else []
 
-Feel free to reach out for any queries.
+                st.session_state["mail_status"] = "sending"
+                with st.spinner("📨 Sending email..."):
+                    mail_ok, mail_err = send_mail_with_pdf(
+                        to_email    = _to,
+                        cc_emails   = _cc_list,
+                        subject     = st.session_state["mail_subject"],
+                        body        = st.session_state["mail_body"],
+                        pdf_path    = _pdf_path,
+                        candidate_name = _cname
+                    )
 
-Warm regards,
-Data Consultant
-Analytics Avenue & Advanced Analytics
-Ph / WhatsApp: 9677298268
-Email: supportteam@analyticsavenue.in"""
-
-                        mail_body = st.text_area(
-                            "Email Body",
-                            value=default_body,
-                            height=320,
-                            key="mail_body"
-                        )
-
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-                        send_clicked = st.button("📤 Send Mail", type="primary", key="send_mail_btn")
-
-                        if send_clicked:
-                            if not mail_to.strip():
-                                st.error("❌ Please enter a To email address")
-                            else:
-                                # Parse CC addresses
-                                cc_list = []
-                                if cc_raw.strip():
-                                    raw_entries = cc_raw.replace(',', '\n').split('\n')
-                                    cc_list = [e.strip() for e in raw_entries if e.strip()]
-
-                                with st.spinner("📨 Sending email..."):
-                                    mail_ok, mail_err = send_mail_with_pdf(
-                                        to_email=mail_to.strip(),
-                                        cc_emails=cc_list,
-                                        subject=mail_subject,
-                                        body=mail_body,
-                                        pdf_path=pdf_path,
-                                        candidate_name=name
-                                    )
-
-                                if mail_ok:
-                                    recipients_display = mail_to
-                                    if cc_list:
-                                        recipients_display += f" (CC: {', '.join(cc_list)})"
-                                    st.success(f"✅ Email sent successfully to {recipients_display}!")
-                                else:
-                                    st.error(f"❌ Failed to send email: {mail_err}")
-                                    st.info("💡 Make sure GMAIL_USER and GMAIL_PASSWORD are set in your Streamlit secrets, and that Gmail App Password (not account password) is used.")
-
-                    with st.expander("📋 AI Content"):
-                        st.json(ai_content)
-                    with st.expander("📊 Career Data"):
-                        st.write(f"**Roles generated:** {len(table_rows)}")
-                        st.write(f"**Domains:** {domain_rowspan_map}")
+                if mail_ok:
+                    disp = _to + (f"  |  CC: {', '.join(_cc_list)}" if _cc_list else "")
+                    st.session_state["mail_status"] = "sent"
+                    st.session_state["mail_msg"]    = f"Email sent successfully to {disp}"
                 else:
-                    st.error("Both PDF and Word generation failed. Please check your assets.")
+                    st.session_state["mail_status"] = "error"
+                    st.session_state["mail_msg"]    = mail_err or "Unknown error"
+            st.rerun()
+
+        with st.expander("📋 AI Content"):
+            st.json(_ai)
+        with st.expander("📊 Career Data"):
+            st.write(f"**Roles generated:** {len(_rows)}")
+            st.write(f"**Domains:** {_dmap}")
