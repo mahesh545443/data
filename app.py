@@ -241,7 +241,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None):
 
 
     header_space = draw_header_no_line(c, page_width, page_height)
-    y = page_height - header_space - 15
+    y = page_height - header_space - 8
 
     style_normal = ParagraphStyle('Normal', fontName='Times-Roman', fontSize=11, leading=13, alignment=TA_LEFT)
     style_bullet = ParagraphStyle('Bullet', parent=style_normal, leftIndent=7, firstLineIndent=-7, leading=13)
@@ -249,22 +249,24 @@ def create_page1(c, name, status, ai_content, program="", technologies=None):
     c.setFillColor(colors.black)
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, f"Hi {name},")
-    y -= 14
+    y -= 12
 
     intro_text = (
         "Our Senior Data Scientist <b>Mr. Subramani</b>, has shared with you the "
         f"prescription based on your recent consultation to join our "
         f"<b>{program}</b>."
     )
+    # Render intro paragraph — program name can be long so we give generous space
     p = Paragraph(intro_text, style_normal)
-    _, h = p.wrap(W, 120)
-    p.drawOn(c, L, y - h)
-    y -= h
+    pw, ph = p.wrap(W, 300)
+    p.drawOn(c, L, y - ph)
+    # Move y down by actual rendered lines — bold text wraps more than plain
+    # so we add a line buffer (13pts = 1 line leading)
+    y -= ph + 26  # extra 2 lines buffer for bold program name wrapping
 
-    y -= 12
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "About Us")
-    y -= 14
+    y -= 12
 
     about_text = (
         "At <b>Analytics Avenue and Advanced Analytics</b>, we are a team of "
@@ -278,12 +280,12 @@ def create_page1(c, name, status, ai_content, program="", technologies=None):
     p.drawOn(c, L, y - h)
     y -= h
 
-    y -= 12
+    y -= 8
     instr_text = "Below you can find the career road map, Key outcomes & suggestions given by our Data Scientist"
     p_instr = Paragraph(f"<b>{instr_text}</b>", style_normal)
     _, h = p_instr.wrap(W, 100)
     p_instr.drawOn(c, L, y - h)
-    y -= (h + 10)
+    y -= (h + 6)
 
     details = [
         ("Name", name),
@@ -302,10 +304,10 @@ def create_page1(c, name, status, ai_content, program="", technologies=None):
         p_val.drawOn(c, VALUE_X, y - vh)
         y -= (vh + 4)
 
-    y -= 12
+    y -= 8
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Career Roadmap")
-    y -= 14
+    y -= 12
 
     tech_str = ", ".join(technologies)
     roadmap = [
@@ -319,29 +321,38 @@ def create_page1(c, name, status, ai_content, program="", technologies=None):
         p_step.drawOn(c, L, y - h)
         y -= (h + 3)
 
-    y -= 12
+    y -= 8
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Key Outcomes")
-    y -= 14
+    y -= 12
 
-    outcomes = [
-        "Data Analysis Skills (SQL, Python, Visualization, Statistics)",
-        "Data Engineer Skills (Cloud, SQL, Python, Data Warehousing, ETL orchestration)",
-        "Machine Learning & Gen AI (LLMs, Prompt Engineering, RAG Pipelines, Embeddings, Vector Databases, Fine-Tuning & Deployment)",
-        f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')} etc.)",
-        "Recreate Industrial Standard projects worked by our Data Scientists",
-        "Placement opportunities, Organic job calls and referral drives"
-    ]
+    # Dynamic key outcomes based on selected technologies
+    tech_set = set(t.lower() for t in technologies)
+    outcomes = []
+    if any(t in tech_set for t in ['sql', 'python', 'statistics', 'power bi']):
+        techs = [t for t in technologies if t.lower() in ['sql', 'python', 'statistics', 'power bi']]
+        outcomes.append(f"Data Analysis Skills ({', '.join(techs)}, Visualization)")
+    if any(t in tech_set for t in ['cloud', 'etl', 'data engineering']):
+        techs = [t for t in technologies if t.lower() in ['cloud', 'etl', 'data engineering', 'sql', 'python']]
+        outcomes.append(f"Data Engineer Skills ({', '.join(techs)}, Data Warehousing, ETL orchestration)")
+    if any(t in tech_set for t in ['machine learning', 'gen ai', 'ml', 'genai']):
+        outcomes.append("Machine Learning & Gen AI (LLMs, Prompt Engineering, RAG Pipelines, Embeddings, Vector Databases, Fine-Tuning & Deployment)")
+    if any(t in tech_set for t in ['power bi', 'tableau', 'visualization']):
+        techs = [t for t in technologies if t.lower() in ['power bi', 'tableau', 'visualization']]
+        outcomes.append(f"Business Intelligence & Visualization ({', '.join(techs)}, Dashboard Development)")
+    outcomes.append(f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')} etc.)")
+    outcomes.append("Recreate Industrial Standard projects worked by our Data Scientists")
+    outcomes.append("Placement opportunities, Organic job calls and referral drives")
     for item in outcomes:
         p = Paragraph(f"• {item}", style_bullet)
         _, h = p.wrap(W, 300)
         p.drawOn(c, L, y - h)
         y -= (h + 3)
 
-    y -= 12
+    y -= 8
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Prescription:")
-    y -= 14
+    y -= 12
 
     intro_line = ai_content.get('intro_line', "Given your background...")
     p = Paragraph(intro_line, style_normal)
@@ -726,14 +737,23 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
     p.paragraph_format.space_after = Pt(4)
     add_bold_run(p, "Key Outcomes")
 
-    outcomes = [
-        "Data Analysis Skills (SQL, Python, Visualization, Statistics)",
-        "Data Engineer Skills (Cloud, SQL, Python, Data Warehousing, ETL orchestration)",
-        "Machine Learning & Gen AI (LLMs, Prompt Engineering, RAG Pipelines, Embeddings, Vector Databases, Fine-Tuning & Deployment)",
-        f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')} etc.)",
-        "Recreate Industrial Standard projects worked by our Data Scientists",
-        "Placement opportunities, Organic job calls and referral drives"
-    ]
+    # Dynamic outcomes based on selected technologies
+    tech_set_doc = set(t.lower() for t in technologies)
+    outcomes = []
+    if any(t in tech_set_doc for t in ['sql', 'python', 'statistics', 'power bi']):
+        techs = [t for t in technologies if t.lower() in ['sql', 'python', 'statistics', 'power bi']]
+        outcomes.append(f"Data Analysis Skills ({', '.join(techs)}, Visualization)")
+    if any(t in tech_set_doc for t in ['cloud', 'etl', 'data engineering']):
+        techs = [t for t in technologies if t.lower() in ['cloud', 'etl', 'data engineering', 'sql', 'python']]
+        outcomes.append(f"Data Engineer Skills ({', '.join(techs)}, Data Warehousing, ETL orchestration)")
+    if any(t in tech_set_doc for t in ['machine learning', 'gen ai', 'ml', 'genai']):
+        outcomes.append("Machine Learning & Gen AI (LLMs, Prompt Engineering, RAG Pipelines, Embeddings, Vector Databases, Fine-Tuning & Deployment)")
+    if any(t in tech_set_doc for t in ['power bi', 'tableau', 'visualization']):
+        techs = [t for t in technologies if t.lower() in ['power bi', 'tableau', 'visualization']]
+        outcomes.append(f"Business Intelligence & Visualization ({', '.join(techs)}, Dashboard Development)")
+    outcomes.append(f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')} etc.)")
+    outcomes.append("Recreate Industrial Standard projects worked by our Data Scientists")
+    outcomes.append("Placement opportunities, Organic job calls and referral drives")
     for item in outcomes:
         p = doc.add_paragraph(style='List Bullet')
         p.paragraph_format.space_after = Pt(2)
@@ -1101,7 +1121,8 @@ with tab2:
             status = st.selectbox("Status *", ["Working Professional", "Student", "Job Seeker"])
         technologies = st.multiselect(
             "Technologies Needed *",
-            ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"],
+            ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI",
+             "Cloud", "ETL", "Data Engineering", "Tableau", "Visualization"],
             default=[],
             help="Select technologies for this program"
         )
