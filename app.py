@@ -229,7 +229,11 @@ def draw_header_no_line(c, page_width, page_height):
 # ==========================================
 # PAGE 1 — PDF
 # ==========================================
-def create_page1(c, name, status, ai_content):
+def create_page1(c, name, status, ai_content, program="", technologies=None):
+    if technologies is None:
+        technologies = ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"]
+    if not program:
+        program = "Nationwide Data Analytics Training and Placement Program 2026"
     page_width, page_height = A4
     L = MARGINS['left']
     R = page_width - MARGINS['right']
@@ -253,8 +257,8 @@ def create_page1(c, name, status, ai_content):
 
     intro_text = (
         "Our Senior Data Scientist <b>Mr. Subramani</b>, has shared with you the "
-        "prescription based on your recent consultation to join our "
-        "<b>Nationwide Data Analytics Training and Placement Program 2025</b>."
+        f"prescription based on your recent consultation to join our "
+        f"<b>{program}</b>."
     )
     p = Paragraph(intro_text, style_normal)
     _, h = p.wrap(W, 120)
@@ -288,7 +292,7 @@ def create_page1(c, name, status, ai_content):
     details = [
         ("Name", name),
         ("Status", status),
-        ("Technologies Needed", "SQL, Python, Statistics, Power BI, Machine Learning, Gen AI"),
+        ("Technologies Needed", ", ".join(technologies)),
         ("Sectors Covered", ai_content.get('domains_title', 'Finance & Supply Chain'))
     ]
     COLON_X = L + 140
@@ -307,8 +311,9 @@ def create_page1(c, name, status, ai_content):
     c.drawString(L, y, "Career Roadmap")
     y -= 14
 
+    tech_str = ", ".join(technologies)
     roadmap = [
-        "Step 1 \u2192 Learn Tools (SQL, Python, Statistics, Power BI, Machine Learning, Gen AI)",
+        f"Step 1 \u2192 Learn Tools ({tech_str})",
         "Step 2 \u2192 Domain-Specific Projects",
         "Step 3 \u2192 Role Readiness (interviews, placement support)"
     ]
@@ -494,10 +499,14 @@ def create_page2(c, ai_content, table_rows, domain_rowspan_map):
 # ==========================================
 # PDF GENERATION
 # ==========================================
-def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, output_path):
+def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, output_path, program="", technologies=None):
+    if technologies is None:
+        technologies = ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"]
+    if not program:
+        program = "Nationwide Data Analytics Training and Placement Program 2026"
     buffer1 = io.BytesIO()
     c1 = canvas.Canvas(buffer1, pagesize=A4)
-    create_page1(c1, name, status, ai_content)
+    create_page1(c1, name, status, ai_content, program, technologies)
     c1.save()
     buffer1.seek(0)
 
@@ -593,7 +602,11 @@ def parse_bold_text(para, html_text, size_pt=11):
 # ==========================================
 # WORD DOCUMENT GENERATION
 # ==========================================
-def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, output_path):
+def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, output_path, program="", technologies=None):
+    if technologies is None:
+        technologies = ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"]
+    if not program:
+        program = "Nationwide Data Analytics Training and Placement Program 2026"
     doc = Document()
 
     # ── Page setup: A4, margins matching PDF ──
@@ -641,9 +654,9 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(8)
     parse_bold_text(p,
-        "Our Senior Data Scientist <b>Mr. Subramani</b>, has shared with you the prescription "
-        "based on your recent consultation to join our "
-        "<b>Nationwide Data Analytics Training and Placement Program 2025</b>."
+        f"Our Senior Data Scientist <b>Mr. Subramani</b>, has shared with you the prescription "
+        f"based on your recent consultation to join our "
+        f"<b>{program}</b>."
     )
 
     # ── About Us ──
@@ -670,7 +683,7 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
     details = [
         ("Name", name),
         ("Status", status),
-        ("Technologies Needed", "SQL, Python, Statistics, Power BI, Machine Learning, Gen AI"),
+        ("Technologies Needed", ", ".join(technologies)),
         ("Sectors Covered", ai_content.get('domains_title', 'Finance & Supply Chain'))
     ]
     det_table = doc.add_table(rows=len(details), cols=3)
@@ -704,7 +717,7 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
     add_bold_run(p, "Career Roadmap")
 
     roadmap = [
-        "Step 1 → Learn Tools (SQL, Python, Statistics, Power BI, Machine Learning, Gen AI)",
+        f"Step 1 → Learn Tools ({', '.join(technologies)})",
         "Step 2 → Domain-Specific Projects",
         "Step 3 → Role Readiness (interviews, placement support)"
     ]
@@ -1063,6 +1076,8 @@ with tab2:
         "table_rows":   [],
         "domain_map":   {},
         "cand_name":    "",
+        "program":      "",
+        "technologies": [],
         "mail_to":      "",
         "mail_cc":      "",
         "mail_subject": "",
@@ -1079,11 +1094,25 @@ with tab2:
     st.subheader("Your Details")
 
     with st.form("form"):
+        program = st.selectbox(
+            "Program Name *",
+            [
+                "Nationwide Data Analytics Training and Placement Program 2026",
+                "Nationwide Data Engineering and Gen AI Program 2026",
+                "Nationwide Data Analytics and Business Intelligence Program 2026"
+            ]
+        )
         col1, col2 = st.columns(2, gap="large")
         with col1:
             name = st.text_input("Name *", placeholder="e.g. Student Name")
         with col2:
             status = st.selectbox("Status *", ["Working Professional", "Student", "Job Seeker"])
+        technologies = st.multiselect(
+            "Technologies Needed *",
+            ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"],
+            default=["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"],
+            help="Select technologies for this program"
+        )
         domains = st.multiselect(
             "Target Domains *",
             ["Finance", "Supply Chain", "Healthcare", "HR Analytics", "E-Commerce",
@@ -1120,8 +1149,8 @@ with tab2:
                     os.makedirs("output", exist_ok=True)
                     pdf_path  = f"output/{base_name}.pdf"
                     docx_path = f"output/{base_name}.docx"
-                    pdf_ok,  pdf_err  = create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, pdf_path)
-                    docx_ok, docx_err = create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, docx_path)
+                    pdf_ok,  pdf_err  = create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, pdf_path, program, technologies)
+                    docx_ok, docx_err = create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, docx_path, program, technologies)
 
                 # Build default mail body
                 default_body = (
@@ -1159,6 +1188,8 @@ with tab2:
                 st.session_state["table_rows"]   = table_rows
                 st.session_state["domain_map"]   = domain_rowspan_map
                 st.session_state["cand_name"]    = name
+                st.session_state["program"]      = program
+                st.session_state["technologies"] = technologies
                 # Reset mail fields for new prescription
                 st.session_state["mail_to"]      = ""
                 st.session_state["mail_cc"]      = ""
