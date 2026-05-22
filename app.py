@@ -1110,7 +1110,7 @@ with tab2:
         technologies = st.multiselect(
             "Technologies Needed *",
             ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"],
-            default=["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"],
+            default=[],
             help="Select technologies for this program"
         )
         domains = st.multiselect(
