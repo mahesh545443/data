@@ -299,8 +299,31 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     y = page_height - header_space - 10
 
     style_normal = ParagraphStyle('Normal', fontName='Times-Roman', fontSize=11, leading=15, alignment=TA_LEFT)
-    style_bullet = ParagraphStyle('Bullet', fontName='Times-Roman', fontSize=11, leading=15,
-                                   alignment=TA_LEFT, leftIndent=12, firstLineIndent=-12)
+    style_bullet_text = ParagraphStyle('BulletText', fontName='Times-Roman', fontSize=11, leading=15, alignment=TA_LEFT)
+
+    def draw_bullet_list(c, items, y, L, W, style):
+        """Render bullet list using a 2-col Table: bullet | text. Guarantees alignment."""
+        BULLET_COL = 14
+        TEXT_COL   = W - BULLET_COL
+        data = []
+        for item in items:
+            data.append([
+                Paragraph("•", style),
+                Paragraph(item, style)
+            ])
+        tbl = Table(data, colWidths=[BULLET_COL, TEXT_COL])
+        tbl.setStyle(TableStyle([
+            ('VALIGN',        (0,0), (-1,-1), 'TOP'),
+            ('ALIGN',         (0,0), (0,-1),  'LEFT'),
+            ('LEFTPADDING',   (0,0), (-1,-1), 0),
+            ('RIGHTPADDING',  (0,0), (-1,-1), 0),
+            ('TOPPADDING',    (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+        tbl.wrapOn(c, W, 1000)
+        th = tbl._height
+        tbl.drawOn(c, L, y - th)
+        return y - th
 
     # ── Hi name ──
     c.setFillColor(colors.black)
@@ -391,11 +414,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     outcomes.append(f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')})")
     outcomes.append("Recreate industrial-standard projects worked on by our Data Scientists")
     outcomes.append("Placement opportunities, organic job calls and referral drives")
-    for item in outcomes:
-        p = Paragraph(f"• {item}", style_bullet)
-        _, h = p.wrap(W, 400)
-        p.drawOn(c, L, y - h)
-        y -= (h + 3)
+    y = draw_bullet_list(c, outcomes, y, L, W, style_normal)
 
     y -= 10
     # ── Prescription heading ──
@@ -421,21 +440,17 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     p.drawOn(c, L, y - h)
     y -= (h + 6)
 
-    # ── Domain bullets ──
+    # ── Domain bullets + projects bullet ──
+    presc_bullets = []
     for b_text in ai_content.get('domain_bullets', []):
         if b_text.strip():
-            p = Paragraph(f"• {b_text}", style_bullet)
-            _, h = p.wrap(W, 400)
-            p.drawOn(c, L, y - h)
-            y -= (h + 4)
-
-    # ── Projects bullet ──
-    projects_bullet = ai_content.get('projects_bullet')
+            presc_bullets.append(b_text)
+    projects_bullet = ai_content.get('projects_bullet', '')
     if projects_bullet:
-        p = Paragraph(f"• {projects_bullet}", style_bullet)
-        _, h = p.wrap(W, 400)
-        p.drawOn(c, L, y - h)
-        y -= (h + 6)
+        presc_bullets.append(projects_bullet)
+    if presc_bullets:
+        y = draw_bullet_list(c, presc_bullets, y, L, W, style_normal)
+        y -= 2
 
     # ── Final sentence ──
     final_sentence = ai_content.get('final_sentence', "")
