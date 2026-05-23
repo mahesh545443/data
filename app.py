@@ -339,30 +339,36 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     # ── Instruction line ──
     instr_text = "Below you can find the key outcomes and suggestions given by our Data Scientist"
     p_instr = Paragraph(f"<b>{instr_text}</b>", style_normal)
-    _, h = p_instr.wrap(W, 100)
+    _, h = p_instr.wrap(W, 60)
     p_instr.drawOn(c, L, y - h)
-    y -= (h + 8)
+    y -= (h + 6)
 
-    details = [
-        ("Name",                name),
-        ("Status",              status),
-        ("Technologies Needed", ", ".join(technologies)),
-        ("Sectors Covered",     ai_content.get('domains_title', 'Finance & Supply Chain'))
+    # ── Details block using Table for perfect label/value alignment ──
+    details_data = [
+        [Paragraph(f"<b>Name</b>",                 style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(name,                                                             style_normal)],
+        [Paragraph(f"<b>Status</b>",               style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(status,                                                           style_normal)],
+        [Paragraph(f"<b>Technologies Needed</b>",  style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(", ".join(technologies),                                          style_normal)],
+        [Paragraph(f"<b>Sectors Covered</b>",      style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(ai_content.get('domains_title', 'Finance & Supply Chain'),        style_normal)],
     ]
-    COLON_X = L + 145
-    VALUE_X  = COLON_X + 12
-    ROW_H    = 16   # fixed row height per detail line
-    for label, value in details:
-        c.setFont('Times-Bold', 11)
-        c.drawString(L,       y, label)
-        c.drawString(COLON_X, y, ":")
-        p_val = Paragraph(value, style_normal)
-        _, vh = p_val.wrap(R - VALUE_X, 80)
-        # Align top of value para with label baseline
-        p_val.drawOn(c, VALUE_X, y - vh + 2)
-        y -= max(vh + 2, ROW_H)
+    col1_w = 145
+    col2_w = 12
+    col3_w = W - col1_w - col2_w
+    details_table = Table(details_data, colWidths=[col1_w, col2_w, col3_w])
+    details_table.setStyle(TableStyle([
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN',         (0, 0), (-1, -1), 'LEFT'),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
+        ('TOPPADDING',    (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LINEBELOW',     (0, -1), (-1, -1), 0, colors.white),
+    ]))
+    details_table.wrapOn(c, W, 200)
+    dt_h = details_table._height
+    details_table.drawOn(c, L, y - dt_h)
+    y -= dt_h + 8
 
-    y -= 10
+    # ── Key Outcomes heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Key Outcomes")
     y -= 14
@@ -375,7 +381,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
         outcomes.append(f"Data Analysis Skills ({', '.join(techs)}, Visualization)")
     if any(t in tech_set for t in ['cloud', 'etl', 'data engineering']):
         techs = [t for t in technologies if t.lower() in ['cloud', 'etl', 'data engineering', 'sql', 'python']]
-        outcomes.append(f"Data Engineer Skills ({', '.join(techs)}, Data Warehousing, ETL orchestration)")
+        outcomes.append(f"Data Engineer Skills ({', '.join(techs)}, Data Warehousing, ETL Orchestration)")
     if any(t in tech_set for t in ['machine learning', 'gen ai', 'ml', 'genai']):
         outcomes.append("Machine Learning & Gen AI (LLMs, Prompt Engineering, RAG Pipelines, Embeddings, Vector Databases, Fine-Tuning & Deployment)")
     if any(t in tech_set for t in ['power bi', 'tableau', 'visualization']):
@@ -383,17 +389,18 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
         outcomes.append(f"Business Intelligence & Visualization ({', '.join(techs)}, Dashboard Development)")
     outcomes.append(f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')})")
     outcomes.append("Recreate industrial-standard projects worked on by our Data Scientists")
-    outcomes.append("Placement opportunities, Organic job calls and referral drives")
+    outcomes.append("Placement opportunities, organic job calls and referral drives")
     for item in outcomes:
         p = Paragraph(f"• {item}", style_bullet)
-        _, h = p.wrap(W, 300)
+        _, h = p.wrap(W, 400)
         p.drawOn(c, L, y - h)
         y -= (h + 3)
 
-    y -= 8
+    y -= 10
+    # ── Prescription heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Prescription:")
-    y -= 12
+    y -= 14
 
     # If a custom consultation note was typed, render it first
     if consultation_note and consultation_note.strip():
@@ -402,36 +409,42 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
         if note_clean and note_clean[-1] not in ".!?":
             note_clean += "."
         p_note = Paragraph(note_clean, style_normal)
-        _, nh = p_note.wrap(W, 300)
+        _, nh = p_note.wrap(W, 400)
         p_note.drawOn(c, L, y - nh)
-        y -= (nh + 8)
+        y -= (nh + 6)
 
+    # ── Intro line ──
     intro_line = ai_content.get('intro_line', "Given your background...")
     p = Paragraph(intro_line, style_normal)
-    _, h = p.wrap(W, 140)
+    _, h = p.wrap(W, 400)
     p.drawOn(c, L, y - h)
-    y -= (h + 8)
+    y -= (h + 6)
 
+    # ── Domain bullets ──
     for b_text in ai_content.get('domain_bullets', []):
         if b_text.strip():
             p = Paragraph(f"• {b_text}", style_bullet)
-            _, h = p.wrap(W, 360)
+            _, h = p.wrap(W, 400)
             p.drawOn(c, L, y - h)
-            y -= (h + 3)
+            y -= (h + 4)
 
+    # ── Projects bullet ──
     projects_bullet = ai_content.get('projects_bullet')
     if projects_bullet:
         p = Paragraph(f"• {projects_bullet}", style_bullet)
-        _, h = p.wrap(W, 360)
+        _, h = p.wrap(W, 400)
         p.drawOn(c, L, y - h)
-        y -= (h + 8)
+        y -= (h + 6)
 
+    # ── Final sentence ──
     final_sentence = ai_content.get('final_sentence', "")
     if final_sentence:
         p_final = Paragraph(final_sentence, style_normal)
-        _, fh = p_final.wrap(W, 140)
+        _, fh = p_final.wrap(W, 400)
         p_final.drawOn(c, L, y - fh)
         y -= fh
+
+
 
 
 # ==========================================
@@ -1016,24 +1029,29 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
             from pdf2image import convert_from_bytes
             with open(template_path_docx, "rb") as tf:
                 pdf_bytes = tf.read()
-            pages = convert_from_bytes(pdf_bytes, first_page=3, last_page=3, dpi=120)
+            pages = convert_from_bytes(pdf_bytes, first_page=3, last_page=3, dpi=130)
             if pages:
                 img_buf = io.BytesIO()
                 pages[0].save(img_buf, format="PNG")
                 img_buf.seek(0)
+                # Set page 3 margins to zero so image fills full page
+                sec3 = doc.add_section()
+                sec3.page_width   = Cm(21)
+                sec3.page_height  = Cm(29.7)
+                sec3.left_margin  = Cm(0)
+                sec3.right_margin = Cm(0)
+                sec3.top_margin   = Cm(0)
+                sec3.bottom_margin = Cm(0)
                 p3_para = doc.add_paragraph()
                 p3_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 p3_para.paragraph_format.space_before = Pt(0)
                 p3_para.paragraph_format.space_after  = Pt(0)
-                pf = p3_para.paragraph_format
-                pf.left_indent  = Cm(-1.8)   # cancel page margins so image fills width
                 run_img = p3_para.add_run()
-                # Width = page width minus margins = 21cm - 3.6cm = 17.4cm
-                run_img.add_picture(img_buf, width=Cm(17.4))
+                run_img.add_picture(img_buf, width=Cm(21), height=Cm(29.7))
         except Exception as e:
-            # Fallback: note that page 3 couldn't be embedded
             p3_para = doc.add_paragraph()
-            p3_para.add_run(f"[Page 3 template could not be embedded: {e}]")
+            p3_para.add_run(f"[Page 3 could not be embedded: {e}]")
+
 
 
     doc.save(output_path)
