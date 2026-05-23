@@ -318,7 +318,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
             ('LEFTPADDING',   (0,0), (-1,-1), 0),
             ('RIGHTPADDING',  (0,0), (-1,-1), 0),
             ('TOPPADDING',    (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
         ]))
         tbl.wrapOn(c, W, 1000)
         th = tbl._height
@@ -340,12 +340,12 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     p = Paragraph(intro_text, style_normal)
     _, ph = p.wrap(W, 300)
     p.drawOn(c, L, y - ph)
-    y -= ph + 14
+    y -= ph + 16   # gap before About Us heading
 
     # ── About Us heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "About Us")
-    y -= 14
+    y -= 13
 
     # ── About Us body ──
     about_text = (
@@ -390,12 +390,12 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     details_table.wrapOn(c, W, 200)
     dt_h = details_table._height
     details_table.drawOn(c, L, y - dt_h)
-    y -= dt_h + 8
+    y -= dt_h + 12   # gap before Key Outcomes heading
 
     # ── Key Outcomes heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Key Outcomes")
-    y -= 14
+    y -= 12
 
     # Dynamic key outcomes based on selected technologies
     tech_set = set(t.lower() for t in technologies)
@@ -416,7 +416,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     outcomes.append("Placement opportunities, organic job calls and referral drives")
     y = draw_bullet_list(c, outcomes, y, L, W, style_normal)
 
-    y -= 10
+    y -= 12   # clear gap before Prescription heading
     # ── Prescription heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Prescription:")
