@@ -6,4 +6,4 @@ pypdf
 python-docx
 lxml
 requests
-
+pdf2image
