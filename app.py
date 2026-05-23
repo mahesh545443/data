@@ -299,16 +299,15 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     y = page_height - header_space - 10
 
     style_normal = ParagraphStyle('Normal', fontName='Times-Roman', fontSize=11, leading=15, alignment=TA_LEFT)
-    style_bullet_text = ParagraphStyle('BulletText', fontName='Times-Roman', fontSize=11, leading=15, alignment=TA_LEFT)
 
     def draw_bullet_list(c, items, y, L, W, style):
-        """Render bullet list using a 2-col Table: bullet | text. Guarantees alignment."""
-        BULLET_COL = 14
+        """Render bullet list using 2-col Table matching Jeevan PDF style."""
+        BULLET_COL = 18   # matches Jeevan's bullet indent
         TEXT_COL   = W - BULLET_COL
         data = []
         for item in items:
             data.append([
-                Paragraph("•", style),
+                Paragraph("\u2022", style),
                 Paragraph(item, style)
             ])
         tbl = Table(data, colWidths=[BULLET_COL, TEXT_COL])
@@ -317,8 +316,8 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
             ('ALIGN',         (0,0), (0,-1),  'LEFT'),
             ('LEFTPADDING',   (0,0), (-1,-1), 0),
             ('RIGHTPADDING',  (0,0), (-1,-1), 0),
-            ('TOPPADDING',    (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('TOPPADDING',    (0,0), (-1,-1), 1),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
         ]))
         tbl.wrapOn(c, W, 1000)
         th = tbl._height
@@ -329,7 +328,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     c.setFillColor(colors.black)
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, f"Hi {name},")
-    y -= 18
+    y -= 20
 
     # ── Intro sentence ──
     intro_text = (
@@ -340,12 +339,12 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     p = Paragraph(intro_text, style_normal)
     _, ph = p.wrap(W, 300)
     p.drawOn(c, L, y - ph)
-    y -= ph + 16   # gap before About Us heading
+    y -= ph + 18
 
     # ── About Us heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "About Us")
-    y -= 13
+    y -= 15
 
     # ── About Us body ──
     about_text = (
@@ -358,44 +357,43 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     p = Paragraph(about_text, style_normal)
     _, h = p.wrap(W, 200)
     p.drawOn(c, L, y - h)
-    y -= h + 12
+    y -= h + 14
 
     # ── Instruction line ──
     instr_text = "Below you can find the key outcomes and suggestions given by our Data Scientist"
     p_instr = Paragraph(f"<b>{instr_text}</b>", style_normal)
     _, h = p_instr.wrap(W, 60)
     p_instr.drawOn(c, L, y - h)
-    y -= (h + 6)
+    y -= (h + 8)
 
-    # ── Details block using Table for perfect label/value alignment ──
+    # ── Details block ──
     details_data = [
-        [Paragraph(f"<b>Name</b>",                 style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(name,                                                             style_normal)],
-        [Paragraph(f"<b>Status</b>",               style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(status,                                                           style_normal)],
-        [Paragraph(f"<b>Technologies Needed</b>",  style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(", ".join(technologies),                                          style_normal)],
-        [Paragraph(f"<b>Sectors Covered</b>",      style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(ai_content.get('domains_title', 'Finance & Supply Chain'),        style_normal)],
+        [Paragraph("<b>Name</b>",                style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(name,                                                      style_normal)],
+        [Paragraph("<b>Status</b>",              style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(status,                                                    style_normal)],
+        [Paragraph("<b>Technologies Needed</b>", style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(", ".join(technologies),                                   style_normal)],
+        [Paragraph("<b>Sectors Covered</b>",     style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(ai_content.get('domains_title', 'Finance & Supply Chain'), style_normal)],
     ]
     col1_w = 148
     col2_w = 16
     col3_w = W - col1_w - col2_w
     details_table = Table(details_data, colWidths=[col1_w, col2_w, col3_w])
     details_table.setStyle(TableStyle([
-        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN',         (0, 0), (-1, -1), 'LEFT'),
-        ('LEFTPADDING',   (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
-        ('TOPPADDING',    (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('LINEBELOW',     (0, -1), (-1, -1), 0, colors.white),
+        ('VALIGN',        (0,0), (-1,-1), 'TOP'),
+        ('ALIGN',         (0,0), (-1,-1), 'LEFT'),
+        ('LEFTPADDING',   (0,0), (-1,-1), 0),
+        ('RIGHTPADDING',  (0,0), (-1,-1), 0),
+        ('TOPPADDING',    (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
     ]))
     details_table.wrapOn(c, W, 200)
     dt_h = details_table._height
     details_table.drawOn(c, L, y - dt_h)
-    y -= dt_h + 16   # blank line gap before Key Outcomes
+    y -= dt_h + 18   # full blank-line gap before Key Outcomes heading
 
     # ── Key Outcomes heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Key Outcomes")
-    y -= 14
+    y -= 15
 
     # Dynamic key outcomes based on selected technologies
     tech_set = set(t.lower() for t in technologies)
@@ -416,11 +414,11 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     outcomes.append("Placement opportunities, organic job calls and referral drives")
     y = draw_bullet_list(c, outcomes, y, L, W, style_normal)
 
-    y -= 16   # blank line gap before Prescription heading
+    y -= 18   # full blank-line gap before Prescription heading
     # ── Prescription heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Prescription:")
-    y -= 14
+    y -= 15
 
     # If a custom consultation note was typed, render it first
     if consultation_note and consultation_note.strip():
@@ -431,14 +429,14 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
         p_note = Paragraph(note_clean, style_normal)
         _, nh = p_note.wrap(W, 400)
         p_note.drawOn(c, L, y - nh)
-        y -= (nh + 6)
+        y -= (nh + 8)
 
     # ── Intro line ──
     intro_line = ai_content.get('intro_line', "Given your background...")
     p = Paragraph(intro_line, style_normal)
     _, h = p.wrap(W, 400)
     p.drawOn(c, L, y - h)
-    y -= (h + 6)
+    y -= (h + 8)
 
     # ── Domain bullets + projects bullet ──
     presc_bullets = []
@@ -450,7 +448,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
         presc_bullets.append(projects_bullet)
     if presc_bullets:
         y = draw_bullet_list(c, presc_bullets, y, L, W, style_normal)
-        y -= 2
+        y -= 4
 
     # ── Final sentence ──
     final_sentence = ai_content.get('final_sentence', "")
@@ -458,7 +456,6 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
         p_final = Paragraph(final_sentence, style_normal)
         _, fh = p_final.wrap(W, 400)
         p_final.drawOn(c, L, y - fh)
-        y -= fh
 
 
 
