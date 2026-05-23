@@ -298,8 +298,9 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     header_space = draw_header_no_line(c, page_width, page_height)
     y = page_height - header_space - 10
 
-    style_normal = ParagraphStyle('Normal', fontName='Times-Roman', fontSize=11, leading=14, alignment=TA_LEFT)
-    style_bullet = ParagraphStyle('Bullet', parent=style_normal, leftIndent=10, firstLineIndent=-10, leading=14)
+    style_normal = ParagraphStyle('Normal', fontName='Times-Roman', fontSize=11, leading=15, alignment=TA_LEFT)
+    style_bullet = ParagraphStyle('Bullet', fontName='Times-Roman', fontSize=11, leading=15,
+                                   alignment=TA_LEFT, leftIndent=12, firstLineIndent=-12)
 
     # ── Hi name ──
     c.setFillColor(colors.black)
@@ -350,8 +351,8 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
         [Paragraph(f"<b>Technologies Needed</b>",  style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(", ".join(technologies),                                          style_normal)],
         [Paragraph(f"<b>Sectors Covered</b>",      style_normal), Paragraph("<b>:</b>", style_normal), Paragraph(ai_content.get('domains_title', 'Finance & Supply Chain'),        style_normal)],
     ]
-    col1_w = 145
-    col2_w = 12
+    col1_w = 148
+    col2_w = 16
     col3_w = W - col1_w - col2_w
     details_table = Table(details_data, colWidths=[col1_w, col2_w, col3_w])
     details_table.setStyle(TableStyle([
@@ -798,10 +799,11 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
                 top={'val': 'none'}, bottom={'val': 'none'},
                 left={'val': 'none'}, right={'val': 'none'}
             )
-    doc.add_paragraph().paragraph_format.space_after = Pt(2)
+    doc.add_paragraph().paragraph_format.space_after = Pt(0)
 
     # ── Key Outcomes ──
     p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
     p.paragraph_format.space_after = Pt(4)
     add_bold_run(p, "Key Outcomes")
 
@@ -827,11 +829,12 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
         p.paragraph_format.space_after = Pt(2)
         add_run(p, item)
 
-    doc.add_paragraph().paragraph_format.space_after = Pt(2)
+    doc.add_paragraph().paragraph_format.space_after = Pt(0)
 
     # ── Prescription ──
     p = doc.add_paragraph()
-    p.paragraph_format.space_after = Pt(6)
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after  = Pt(5)
     add_bold_run(p, "Prescription:")
 
     # Custom consultation note — rendered first if present
@@ -1020,9 +1023,7 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
             merged_cell = ct.cell(start_idx, 0)
             merged_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-    # ── PAGE BREAK → Page 3 from template ──
-    doc.add_page_break()
-
+    # ── PAGE 3 from template — new section (section break acts as page break) ──
     template_path_docx = "assets/template.pdf"
     if os.path.exists(template_path_docx):
         try:
@@ -1034,13 +1035,13 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
                 img_buf = io.BytesIO()
                 pages[0].save(img_buf, format="PNG")
                 img_buf.seek(0)
-                # Set page 3 margins to zero so image fills full page
+                # New section with zero margins so image fills full A4 page
                 sec3 = doc.add_section()
-                sec3.page_width   = Cm(21)
-                sec3.page_height  = Cm(29.7)
-                sec3.left_margin  = Cm(0)
-                sec3.right_margin = Cm(0)
-                sec3.top_margin   = Cm(0)
+                sec3.page_width    = Cm(21)
+                sec3.page_height   = Cm(29.7)
+                sec3.left_margin   = Cm(0)
+                sec3.right_margin  = Cm(0)
+                sec3.top_margin    = Cm(0)
                 sec3.bottom_margin = Cm(0)
                 p3_para = doc.add_paragraph()
                 p3_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1049,6 +1050,7 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
                 run_img = p3_para.add_run()
                 run_img.add_picture(img_buf, width=Cm(21), height=Cm(29.7))
         except Exception as e:
+            doc.add_page_break()
             p3_para = doc.add_paragraph()
             p3_para.add_run(f"[Page 3 could not be embedded: {e}]")
 
