@@ -127,9 +127,44 @@ CAREER_TEMPLATES = {
     ]
 }
 
-# ==========================================
-# AI PRESCRIPTION GENERATOR
-# ==========================================
+def filter_skills_for_technologies(skills_str, technologies):
+    """
+    Filter the Key Technical Skills cell in the career table based on selected technologies.
+    Removes ML, GenAI, etc. if they were not selected. Always keeps SQL, Python, Statistics, Excel.
+    """
+    if not technologies:
+        return skills_str
+    tech_lower = set(t.lower() for t in technologies)
+    has_ml     = any(t in tech_lower for t in ['machine learning', 'gen ai', 'ml', 'genai'])
+    has_bi     = any(t in tech_lower for t in ['power bi', 'tableau', 'visualization'])
+    has_cloud  = any(t in tech_lower for t in ['cloud', 'etl', 'data engineering'])
+
+    # Split on comma, strip each token
+    tokens = [s.strip() for s in skills_str.split(',')]
+    filtered = []
+    for t in tokens:
+        tl = t.lower()
+        # Always keep base skills
+        if any(base in tl for base in ['sql', 'python', 'statistics', 'excel', 'forecasting',
+                                        'financial modeling', 'financial modelling', 'process data',
+                                        'healthcare data', 'siem', 'iot', 'telematics', 'time series']):
+            filtered.append(t)
+        elif any(ml in tl for ml in ['ml', 'machine learning', 'genai', 'gen ai', 'llm',
+                                      'rag', 'embedding', 'fine-tun', 'prompt']):
+            if has_ml:
+                filtered.append(t)
+        elif any(bi in tl for bi in ['power bi', 'tableau', 'visualization', 'dashboard']):
+            if has_bi:
+                filtered.append(t)
+        elif any(cl in tl for cl in ['cloud', 'etl', 'data engineering', 'warehouse']):
+            if has_cloud:
+                filtered.append(t)
+        else:
+            filtered.append(t)
+    return ', '.join(filtered) if filtered else skills_str
+
+
+
 def get_ai_prescription_text(selected_domains, technologies=None):
     if technologies is None:
         technologies = []
@@ -188,14 +223,19 @@ Match the style, grammar, and capitalisation of the example above. Return ONLY v
         return {"error": str(e)}
 
 
-def get_table_data_with_rowspan(selected_domains):
+def get_table_data_with_rowspan(selected_domains, technologies=None):
+    if technologies is None:
+        technologies = []
     table_rows = []
     domain_rowspan_map = {}
     for domain in selected_domains:
         if domain in CAREER_TEMPLATES:
             domain_rows = CAREER_TEMPLATES[domain]
             domain_rowspan_map[domain] = len(domain_rows)
-            table_rows.extend(domain_rows)
+            for row in domain_rows:
+                # row = [domain_label, role, challenge, skills, companies]
+                filtered_skills = filter_skills_for_technologies(row[3], technologies)
+                table_rows.append([row[0], row[1], row[2], filtered_skills, row[4]])
     return table_rows, domain_rowspan_map
 
 
@@ -256,31 +296,34 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
 
 
     header_space = draw_header_no_line(c, page_width, page_height)
-    y = page_height - header_space - 8
+    y = page_height - header_space - 10
 
-    style_normal = ParagraphStyle('Normal', fontName='Times-Roman', fontSize=11, leading=13, alignment=TA_LEFT)
-    style_bullet = ParagraphStyle('Bullet', parent=style_normal, leftIndent=7, firstLineIndent=-7, leading=13)
+    style_normal = ParagraphStyle('Normal', fontName='Times-Roman', fontSize=11, leading=14, alignment=TA_LEFT)
+    style_bullet = ParagraphStyle('Bullet', parent=style_normal, leftIndent=10, firstLineIndent=-10, leading=14)
 
+    # ── Hi name ──
     c.setFillColor(colors.black)
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, f"Hi {name},")
-    y -= 16
+    y -= 18
 
+    # ── Intro sentence ──
     intro_text = (
         "Our Senior Data Scientist <b>Mr. Subramani</b>, has shared with you the "
         f"prescription based on your recent consultation to join our "
         f"<b>{program}</b>."
     )
-    # Render intro paragraph — program name can be long so we give generous space
     p = Paragraph(intro_text, style_normal)
-    pw, ph = p.wrap(W, 300)
+    _, ph = p.wrap(W, 300)
     p.drawOn(c, L, y - ph)
-    y -= ph + 14  # clean gap before About Us
+    y -= ph + 14
 
+    # ── About Us heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "About Us")
-    y -= 12
+    y -= 14
 
+    # ── About Us body ──
     about_text = (
         "At <b>Analytics Avenue and Advanced Analytics</b>, we are a team of "
         "<b>Data Scientists, Data Engineers, and BI Developers</b> throughout India "
@@ -289,38 +332,40 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
         "transition into various <b>Data Analytics roles</b>."
     )
     p = Paragraph(about_text, style_normal)
-    _, h = p.wrap(W, 160)
+    _, h = p.wrap(W, 200)
     p.drawOn(c, L, y - h)
-    y -= h + 10  # gap after About Us paragraph
+    y -= h + 12
 
-    y -= 8
+    # ── Instruction line ──
     instr_text = "Below you can find the key outcomes and suggestions given by our Data Scientist"
     p_instr = Paragraph(f"<b>{instr_text}</b>", style_normal)
     _, h = p_instr.wrap(W, 100)
     p_instr.drawOn(c, L, y - h)
-    y -= (h + 6)
+    y -= (h + 8)
 
     details = [
-        ("Name", name),
-        ("Status", status),
+        ("Name",                name),
+        ("Status",              status),
         ("Technologies Needed", ", ".join(technologies)),
-        ("Sectors Covered", ai_content.get('domains_title', 'Finance & Supply Chain'))
+        ("Sectors Covered",     ai_content.get('domains_title', 'Finance & Supply Chain'))
     ]
-    COLON_X = L + 140
-    VALUE_X = COLON_X + 15
+    COLON_X = L + 145
+    VALUE_X  = COLON_X + 12
+    ROW_H    = 16   # fixed row height per detail line
     for label, value in details:
         c.setFont('Times-Bold', 11)
-        c.drawString(L, y - 10, label)
-        c.drawString(COLON_X, y - 10, ":")
+        c.drawString(L,       y, label)
+        c.drawString(COLON_X, y, ":")
         p_val = Paragraph(value, style_normal)
-        _, vh = p_val.wrap(R - VALUE_X, 120)
-        p_val.drawOn(c, VALUE_X, y - vh)
-        y -= (vh + 4)
+        _, vh = p_val.wrap(R - VALUE_X, 80)
+        # Align top of value para with label baseline
+        p_val.drawOn(c, VALUE_X, y - vh + 2)
+        y -= max(vh + 2, ROW_H)
 
-    y -= 8
+    y -= 10
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Key Outcomes")
-    y -= 12
+    y -= 14
 
     # Dynamic key outcomes based on selected technologies
     tech_set = set(t.lower() for t in technologies)
@@ -336,8 +381,8 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     if any(t in tech_set for t in ['power bi', 'tableau', 'visualization']):
         techs = [t for t in technologies if t.lower() in ['power bi', 'tableau', 'visualization']]
         outcomes.append(f"Business Intelligence & Visualization ({', '.join(techs)}, Dashboard Development)")
-    outcomes.append(f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')} etc.)")
-    outcomes.append("Recreate Industrial Standard projects worked by our Data Scientists")
+    outcomes.append(f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')})")
+    outcomes.append("Recreate industrial-standard projects worked on by our Data Scientists")
     outcomes.append("Placement opportunities, Organic job calls and referral drives")
     for item in outcomes:
         p = Paragraph(f"• {item}", style_bullet)
@@ -691,6 +736,7 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
 
     # ── About Us ──
     p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(8)
     p.paragraph_format.space_after = Pt(4)
     add_bold_run(p, "About Us")
 
@@ -760,8 +806,8 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
     if any(t in tech_set_doc for t in ['power bi', 'tableau', 'visualization']):
         techs = [t for t in technologies if t.lower() in ['power bi', 'tableau', 'visualization']]
         outcomes.append(f"Business Intelligence & Visualization ({', '.join(techs)}, Dashboard Development)")
-    outcomes.append(f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')} etc.)")
-    outcomes.append("Recreate Industrial Standard projects worked by our Data Scientists")
+    outcomes.append(f"Domain Knowledge ({ai_content.get('domains_title', 'Finance & Supply Chain')})")
+    outcomes.append("Recreate industrial-standard projects worked on by our Data Scientists")
     outcomes.append("Placement opportunities, Organic job calls and referral drives")
     for item in outcomes:
         p = doc.add_paragraph(style='List Bullet')
@@ -970,7 +1016,7 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
             from pdf2image import convert_from_bytes
             with open(template_path_docx, "rb") as tf:
                 pdf_bytes = tf.read()
-            pages = convert_from_bytes(pdf_bytes, first_page=3, last_page=3, dpi=150)
+            pages = convert_from_bytes(pdf_bytes, first_page=3, last_page=3, dpi=120)
             if pages:
                 img_buf = io.BytesIO()
                 pages[0].save(img_buf, format="PNG")
@@ -978,11 +1024,17 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
                 p3_para = doc.add_paragraph()
                 p3_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 p3_para.paragraph_format.space_before = Pt(0)
-                p3_para.paragraph_format.space_after = Pt(0)
+                p3_para.paragraph_format.space_after  = Pt(0)
+                pf = p3_para.paragraph_format
+                pf.left_indent  = Cm(-1.8)   # cancel page margins so image fills width
                 run_img = p3_para.add_run()
-                run_img.add_picture(img_buf, width=Inches(6.5))
-        except Exception:
-            pass  # silently skip if conversion fails
+                # Width = page width minus margins = 21cm - 3.6cm = 17.4cm
+                run_img.add_picture(img_buf, width=Cm(17.4))
+        except Exception as e:
+            # Fallback: note that page 3 couldn't be embedded
+            p3_para = doc.add_paragraph()
+            p3_para.add_run(f"[Page 3 template could not be embedded: {e}]")
+
 
     doc.save(output_path)
     return True, None
@@ -1208,7 +1260,7 @@ with tab2:
                 st.error(f"AI Error: {ai_content['error']}")
             else:
                 with st.spinner("📊 Building career table..."):
-                    table_rows, domain_rowspan_map = get_table_data_with_rowspan(domains)
+                    table_rows, domain_rowspan_map = get_table_data_with_rowspan(domains, technologies)
 
                 with st.spinner("📄 Creating PDF & Word document..."):
                     ts        = int(time.time())
