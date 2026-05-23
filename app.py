@@ -390,12 +390,12 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     details_table.wrapOn(c, W, 200)
     dt_h = details_table._height
     details_table.drawOn(c, L, y - dt_h)
-    y -= dt_h + 12   # gap before Key Outcomes heading
+    y -= dt_h + 16   # blank line gap before Key Outcomes
 
     # ── Key Outcomes heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Key Outcomes")
-    y -= 12
+    y -= 14
 
     # Dynamic key outcomes based on selected technologies
     tech_set = set(t.lower() for t in technologies)
@@ -416,7 +416,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     outcomes.append("Placement opportunities, organic job calls and referral drives")
     y = draw_bullet_list(c, outcomes, y, L, W, style_normal)
 
-    y -= 12   # clear gap before Prescription heading
+    y -= 16   # blank line gap before Prescription heading
     # ── Prescription heading ──
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Prescription:")
