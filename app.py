@@ -264,7 +264,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     c.setFillColor(colors.black)
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, f"Hi {name},")
-    y -= 12
+    y -= 16
 
     intro_text = (
         "Our Senior Data Scientist <b>Mr. Subramani</b>, has shared with you the "
@@ -275,9 +275,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     p = Paragraph(intro_text, style_normal)
     pw, ph = p.wrap(W, 300)
     p.drawOn(c, L, y - ph)
-    # Move y down by actual rendered lines — bold text wraps more than plain
-    # so we add a line buffer (13pts = 1 line leading)
-    y -= ph + 26  # extra 2 lines buffer for bold program name wrapping
+    y -= ph + 14  # clean gap before About Us
 
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "About Us")
@@ -293,7 +291,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
     p = Paragraph(about_text, style_normal)
     _, h = p.wrap(W, 160)
     p.drawOn(c, L, y - h)
-    y -= h
+    y -= h + 10  # gap after About Us paragraph
 
     y -= 8
     instr_text = "Below you can find the key outcomes and suggestions given by our Data Scientist"
@@ -354,9 +352,10 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
 
     # If a custom consultation note was typed, render it first
     if consultation_note and consultation_note.strip():
-        note_clean = consultation_note.strip()
-        # Capitalise first letter
+        note_clean = consultation_note.strip().strip('"').strip("'").strip()
         note_clean = note_clean[0].upper() + note_clean[1:]
+        if note_clean and note_clean[-1] not in ".!?":
+            note_clean += "."
         p_note = Paragraph(note_clean, style_normal)
         _, nh = p_note.wrap(W, 300)
         p_note.drawOn(c, L, y - nh)
@@ -393,7 +392,27 @@ def create_page1(c, name, status, ai_content, program="", technologies=None, con
 # ==========================================
 # PAGE 2 — PDF
 # ==========================================
-def create_page2(c, ai_content, table_rows, domain_rowspan_map):
+def create_page2(c, ai_content, table_rows, domain_rowspan_map, technologies=None):
+    if technologies is None:
+        technologies = []
+    tech_set_p2 = set(t.lower() for t in technologies)
+    has_ml_p2    = any(t in tech_set_p2 for t in ['machine learning', 'gen ai', 'ml', 'genai'])
+    has_bi_p2    = any(t in tech_set_p2 for t in ['power bi', 'tableau', 'visualization'])
+
+    # Build dynamic project description for Industry-Relevant Projects
+    focus_items = ["data modelling", "EDA"]
+    if has_ml_p2:
+        focus_items.append("Machine Learning")
+        focus_items.append("GenAI")
+    if has_bi_p2:
+        focus_items.append("Business Intelligence")
+    focus_items += ["forecasting", "cost optimisation", "anomaly detection", "decision support"]
+    focus_str = ", ".join(focus_items)
+    industry_projects_text = (
+        f"Work on 3 projects across {ai_content['domains_title']}, focusing on "
+        f"{focus_str}."
+    )
+
     page_width, page_height = A4
 
 
@@ -414,7 +433,7 @@ def create_page2(c, ai_content, table_rows, domain_rowspan_map):
     services_data = [
         [Paragraph("<b>Service</b>", style_heading), Paragraph("<b>Details</b>", style_heading)],
         [Paragraph("<b>1. Industry-Relevant Projects</b>", style_heading),
-         Paragraph(f"Work on 3 projects across {ai_content['domains_title']}, focusing on data modeling, EDA, Machine Learning, and GenAI for forecasting, cost optimization, anomaly detection, and decision support.", style_small)],
+         Paragraph(industry_projects_text, style_small)],
         [Paragraph("<b>2. Secret Job Portals Access</b>", style_heading),
          Paragraph("Setup and optimize your profile on 9 exclusive job portals to help you receive organic job calls", style_small)],
         [Paragraph("<b>3. Interview Preparation Materials</b>", style_heading),
@@ -523,7 +542,7 @@ def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, o
 
     buffer2 = io.BytesIO()
     c2 = canvas.Canvas(buffer2, pagesize=A4)
-    create_page2(c2, ai_content, table_rows, domain_rowspan_map)
+    create_page2(c2, ai_content, table_rows, domain_rowspan_map, technologies)
     c2.save()
     buffer2.seek(0)
 
@@ -720,10 +739,7 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
                 top={'val': 'none'}, bottom={'val': 'none'},
                 left={'val': 'none'}, right={'val': 'none'}
             )
-    doc.add_paragraph().paragraph_format.space_after = Pt(4)
-
-    sp = doc.add_paragraph()
-    sp.paragraph_format.space_after = Pt(4)
+    doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
     # ── Key Outcomes ──
     p = doc.add_paragraph()
@@ -752,8 +768,7 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
         p.paragraph_format.space_after = Pt(2)
         add_run(p, item)
 
-    sp = doc.add_paragraph()
-    sp.paragraph_format.space_after = Pt(4)
+    doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
     # ── Prescription ──
     p = doc.add_paragraph()
@@ -762,8 +777,10 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
 
     # Custom consultation note — rendered first if present
     if consultation_note and consultation_note.strip():
-        note_clean = consultation_note.strip()
+        note_clean = consultation_note.strip().strip('"').strip("'").strip()
         note_clean = note_clean[0].upper() + note_clean[1:]
+        if note_clean and note_clean[-1] not in ".!?":
+            note_clean += "."
         p = doc.add_paragraph()
         p.paragraph_format.space_after = Pt(6)
         add_run(p, note_clean)
@@ -817,11 +834,24 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(6)
     add_bold_run(p, "Our Customized Services for you:")
+    # Dynamic Industry-Relevant Projects description
+    tech_set_doc2 = set(t.lower() for t in technologies)
+    has_ml_doc  = any(t in tech_set_doc2 for t in ['machine learning', 'gen ai', 'ml', 'genai'])
+    has_bi_doc  = any(t in tech_set_doc2 for t in ['power bi', 'tableau', 'visualization'])
+    focus_doc = ["data modelling", "EDA"]
+    if has_ml_doc:
+        focus_doc.append("Machine Learning")
+        focus_doc.append("GenAI")
+    if has_bi_doc:
+        focus_doc.append("Business Intelligence")
+    focus_doc += ["forecasting", "cost optimisation", "anomaly detection", "decision support"]
+    industry_proj_doc = (
+        f"Work on 3 projects across {ai_content['domains_title']}, focusing on "
+        f"{', '.join(focus_doc)}."
+    )
 
-    svc_headers = ["Service", "Details"]
     svc_rows = [
-        ("1. Industry-Relevant Projects",
-         f"Work on 3 projects across {ai_content['domains_title']}, focusing on data modeling, EDA, Machine Learning, and GenAI for forecasting, cost optimization, anomaly detection, and decision support."),
+        ("1. Industry-Relevant Projects", industry_proj_doc),
         ("2. Secret Job Portals Access",
          "Setup and optimize your profile on 9 exclusive job portals to help you receive organic job calls"),
         ("3. Interview Preparation Materials",
@@ -930,6 +960,29 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
             ct.cell(start_idx, 0).merge(ct.cell(end_idx, 0))
             merged_cell = ct.cell(start_idx, 0)
             merged_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+    # ── PAGE BREAK → Page 3 from template ──
+    doc.add_page_break()
+
+    template_path_docx = "assets/template.pdf"
+    if os.path.exists(template_path_docx):
+        try:
+            from pdf2image import convert_from_bytes
+            with open(template_path_docx, "rb") as tf:
+                pdf_bytes = tf.read()
+            pages = convert_from_bytes(pdf_bytes, first_page=3, last_page=3, dpi=150)
+            if pages:
+                img_buf = io.BytesIO()
+                pages[0].save(img_buf, format="PNG")
+                img_buf.seek(0)
+                p3_para = doc.add_paragraph()
+                p3_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p3_para.paragraph_format.space_before = Pt(0)
+                p3_para.paragraph_format.space_after = Pt(0)
+                run_img = p3_para.add_run()
+                run_img.add_picture(img_buf, width=Inches(6.5))
+        except Exception:
+            pass  # silently skip if conversion fails
 
     doc.save(output_path)
     return True, None
