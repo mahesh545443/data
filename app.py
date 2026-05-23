@@ -130,33 +130,48 @@ CAREER_TEMPLATES = {
 # ==========================================
 # AI PRESCRIPTION GENERATOR
 # ==========================================
-def get_ai_prescription_text(selected_domains):
+def get_ai_prescription_text(selected_domains, technologies=None):
+    if technologies is None:
+        technologies = []
     domain_str = " & ".join(selected_domains)
+    tech_str = ", ".join(technologies) if technologies else "SQL, Python, Statistics"
+    has_ml = any(t.lower() in ['machine learning', 'gen ai', 'ml', 'genai'] for t in technologies)
+
     if not GROQ_API_KEY or GROQ_API_KEY == "your_groq_api_key_here":
         return {"error": "API Key not configured"}
 
-    PROMPT = f"""You are a Senior Data Scientist at Analytics Avenue.
-Generate a JSON prescription for: {domain_str}
-CRITICAL RULES:
-1. Use <b>text</b> for bold formatting on domain names, technologies
-2. Return ONLY these keys:
-   - "intro_line": Introduction with <b> tags
-   - "domain_bullets": List of domain descriptions with <b> tags (one bullet per domain)
-   - "projects_bullet": Projects description with <b> tags
-   - "final_sentence": Closing with <b> tags
+    ml_instruction = (
+        "Include references to Machine Learning and GenAI where relevant."
+        if has_ml else
+        "Do NOT mention Machine Learning, GenAI, LLMs, RAG, or any AI/ML terms. Focus only on SQL, statistics, and data analysis."
+    )
 
-For "Finance & Supply Chain":
+    PROMPT = f"""You are a Senior Data Scientist at Analytics Avenue.
+Generate a JSON prescription for a candidate targeting: {domain_str}
+Technologies selected: {tech_str}
+{ml_instruction}
+
+CRITICAL RULES:
+1. Use <b>text</b> for bold formatting on domain names and technologies.
+2. Every sentence must be grammatically correct with proper capitalisation.
+3. Return ONLY these keys:
+   - "intro_line": One sentence introduction with <b> tags
+   - "domain_bullets": List of domain descriptions with <b> tags (one bullet per domain)
+   - "projects_bullet": Hands-on projects description. Only mention GenAI/ML if those technologies were selected.
+   - "final_sentence": Closing sentence listing only the selected technologies with <b> tags
+
+Example for "Finance & Supply Chain" with SQL, Python, Machine Learning, Gen AI:
 {{
   "intro_line": "Given your background, we will support your transition into <b>Finance & Supply Chain Analytics</b> roles, enabling you to solve real business and operational problems using <b>Machine Learning and GenAI</b>.",
   "domain_bullets": [
-    "In <b>Finance Analytics</b>, you will work on financial performance analysis, budgeting and forecasting, risk assessment, fraud pattern identification, and profitability optimization.",
-    "In <b>Supply Chain Analytics</b>, you will focus on demand forecasting, inventory optimization, logistics performance, supplier analysis, and end-to-end cost efficiency."
+    "In <b>Finance Analytics</b>, you will work on financial performance analysis, budgeting and forecasting, risk assessment, fraud pattern identification, and profitability optimisation.",
+    "In <b>Supply Chain Analytics</b>, you will focus on demand forecasting, inventory optimisation, logistics performance, supplier analysis, and end-to-end cost efficiency."
   ],
-  "projects_bullet": "Hands-on projects include financial variance and profitability analysis, risk and anomaly detection, demand forecasting, inventory health analysis, logistics optimization, and supplier performance tracking. You will also leverage <b>GenAI</b> for automated insights, root-cause analysis, and conversational analytics (projects revealed during placement training).",
-  "final_sentence": "You will apply <b>SQL, Statistics, Machine Learning, and GenAI</b> to <b>finance and supply chain</b> datasets, preparing you for high-impact analytics roles across these domains."
+  "projects_bullet": "Hands-on projects include financial variance and profitability analysis, risk and anomaly detection, demand forecasting, inventory health analysis, logistics optimisation, and supplier performance tracking. You will also leverage <b>GenAI</b> for automated insights, root-cause analysis, and conversational analytics (projects revealed during placement training).",
+  "final_sentence": "You will apply <b>SQL, Python, Machine Learning, and GenAI</b> to <b>Finance and Supply Chain</b> datasets, preparing you for high-impact analytics roles across these domains."
 }}
-NOW GENERATE for: {domain_str}
-Match the style above with proper <b> tags. Return ONLY valid JSON."""
+NOW GENERATE for: {domain_str} with technologies: {tech_str}
+Match the style, grammar, and capitalisation of the example above. Return ONLY valid JSON."""
 
     try:
         client = Groq(api_key=GROQ_API_KEY)
@@ -229,7 +244,7 @@ def draw_header_no_line(c, page_width, page_height):
 # ==========================================
 # PAGE 1 — PDF
 # ==========================================
-def create_page1(c, name, status, ai_content, program="", technologies=None):
+def create_page1(c, name, status, ai_content, program="", technologies=None, consultation_note=""):
     if technologies is None:
         technologies = ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"]
     if not program:
@@ -281,7 +296,7 @@ def create_page1(c, name, status, ai_content, program="", technologies=None):
     y -= h
 
     y -= 8
-    instr_text = "Below you can find the career road map, Key outcomes & suggestions given by our Data Scientist"
+    instr_text = "Below you can find the key outcomes and suggestions given by our Data Scientist"
     p_instr = Paragraph(f"<b>{instr_text}</b>", style_normal)
     _, h = p_instr.wrap(W, 100)
     p_instr.drawOn(c, L, y - h)
@@ -303,23 +318,6 @@ def create_page1(c, name, status, ai_content, program="", technologies=None):
         _, vh = p_val.wrap(R - VALUE_X, 120)
         p_val.drawOn(c, VALUE_X, y - vh)
         y -= (vh + 4)
-
-    y -= 8
-    c.setFont('Times-Bold', 11)
-    c.drawString(L, y, "Career Roadmap")
-    y -= 12
-
-    tech_str = ", ".join(technologies)
-    roadmap = [
-        f"Step 1 \u2192 Learn Tools ({tech_str})",
-        "Step 2 \u2192 Domain-Specific Projects",
-        "Step 3 \u2192 Role Readiness (interviews, placement support)"
-    ]
-    for step in roadmap:
-        p_step = Paragraph(step, style_normal)
-        _, h = p_step.wrap(W, 100)
-        p_step.drawOn(c, L, y - h)
-        y -= (h + 3)
 
     y -= 8
     c.setFont('Times-Bold', 11)
@@ -353,6 +351,16 @@ def create_page1(c, name, status, ai_content, program="", technologies=None):
     c.setFont('Times-Bold', 11)
     c.drawString(L, y, "Prescription:")
     y -= 12
+
+    # If a custom consultation note was typed, render it first
+    if consultation_note and consultation_note.strip():
+        note_clean = consultation_note.strip()
+        # Capitalise first letter
+        note_clean = note_clean[0].upper() + note_clean[1:]
+        p_note = Paragraph(note_clean, style_normal)
+        _, nh = p_note.wrap(W, 300)
+        p_note.drawOn(c, L, y - nh)
+        y -= (nh + 8)
 
     intro_line = ai_content.get('intro_line', "Given your background...")
     p = Paragraph(intro_line, style_normal)
@@ -502,14 +510,14 @@ def create_page2(c, ai_content, table_rows, domain_rowspan_map):
 # ==========================================
 # PDF GENERATION
 # ==========================================
-def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, output_path, program="", technologies=None):
+def create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, output_path, program="", technologies=None, consultation_note=""):
     if technologies is None:
         technologies = ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"]
     if not program:
         program = "Nationwide Data Analytics Training and Placement Program 2026"
     buffer1 = io.BytesIO()
     c1 = canvas.Canvas(buffer1, pagesize=A4)
-    create_page1(c1, name, status, ai_content, program, technologies)
+    create_page1(c1, name, status, ai_content, program, technologies, consultation_note)
     c1.save()
     buffer1.seek(0)
 
@@ -605,7 +613,7 @@ def parse_bold_text(para, html_text, size_pt=11):
 # ==========================================
 # WORD DOCUMENT GENERATION
 # ==========================================
-def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, output_path, program="", technologies=None):
+def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, output_path, program="", technologies=None, consultation_note=""):
     if technologies is None:
         technologies = ["SQL", "Python", "Statistics", "Power BI", "Machine Learning", "Gen AI"]
     if not program:
@@ -680,7 +688,7 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
     # ── Instruction line ──
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(8)
-    add_bold_run(p, "Below you can find the career road map, Key outcomes & suggestions given by our Data Scientist")
+    add_bold_run(p, "Below you can find the key outcomes and suggestions given by our Data Scientist")
 
     # ── Details table ──
     details = [
@@ -713,21 +721,6 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
                 left={'val': 'none'}, right={'val': 'none'}
             )
     doc.add_paragraph().paragraph_format.space_after = Pt(4)
-
-    # ── Career Roadmap ──
-    p = doc.add_paragraph()
-    p.paragraph_format.space_after = Pt(4)
-    add_bold_run(p, "Career Roadmap")
-
-    roadmap = [
-        f"Step 1 → Learn Tools ({', '.join(technologies)})",
-        "Step 2 → Domain-Specific Projects",
-        "Step 3 → Role Readiness (interviews, placement support)"
-    ]
-    for step in roadmap:
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(2)
-        add_run(p, step)
 
     sp = doc.add_paragraph()
     sp.paragraph_format.space_after = Pt(4)
@@ -766,6 +759,14 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(6)
     add_bold_run(p, "Prescription:")
+
+    # Custom consultation note — rendered first if present
+    if consultation_note and consultation_note.strip():
+        note_clean = consultation_note.strip()
+        note_clean = note_clean[0].upper() + note_clean[1:]
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(6)
+        add_run(p, note_clean)
 
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(6)
@@ -1020,7 +1021,7 @@ st.markdown(f"""
 st.title("🤖 AI Prescription Generator")
 st.markdown('<p class="subtitle">Generate a personalised data career prescription powered by AI</p>', unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["Overview", "Application"])
+tab1, tab2, tab3 = st.tabs(["Overview", "Application", "Special Consultation"])
 
 # ════════════════════════════════════════════════════════
 # TAB 1 — OVERVIEW
@@ -1094,8 +1095,9 @@ with tab2:
         "mail_cc":      "",
         "mail_subject": "",
         "mail_body":    "",
-        "mail_status":  "",   # "" | "sending" | "sent" | "error"
-        "mail_msg":     "",
+        "mail_status":       "",   # "" | "sending" | "sent" | "error"
+        "mail_msg":          "",
+        "consultation_note": "",
     }.items():
         if _k not in st.session_state:
             st.session_state[_k] = _v
@@ -1147,7 +1149,7 @@ with tab2:
                 st.error(e)
         else:
             with st.spinner("🤖 AI generating prescription..."):
-                ai_content = get_ai_prescription_text(domains)
+                ai_content = get_ai_prescription_text(domains, technologies)
 
             if "error" in ai_content:
                 st.error(f"AI Error: {ai_content['error']}")
@@ -1162,8 +1164,8 @@ with tab2:
                     os.makedirs("output", exist_ok=True)
                     pdf_path  = f"output/{base_name}.pdf"
                     docx_path = f"output/{base_name}.docx"
-                    pdf_ok,  pdf_err  = create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, pdf_path, program, technologies)
-                    docx_ok, docx_err = create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, docx_path, program, technologies)
+                    pdf_ok,  pdf_err  = create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, pdf_path, program, technologies, st.session_state.get("consultation_note", ""))
+                    docx_ok, docx_err = create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, docx_path, program, technologies, st.session_state.get("consultation_note", ""))
 
                 # Build default mail body
                 default_body = (
@@ -1321,3 +1323,70 @@ with tab2:
         with st.expander("📊 Career Data"):
             st.write(f"**Roles generated:** {len(_rows)}")
             st.write(f"**Domains:** {_dmap}")
+
+# ════════════════════════════════════════════════════════
+# TAB 3 — SPECIAL CONSULTATION
+# ════════════════════════════════════════════════════════
+with tab3:
+    st.subheader("Special Consultation Note")
+    st.markdown(
+        '<p style="color:#555;font-size:15px;margin-bottom:24px;">'
+        "Type your custom consultation note below. This will appear directly under the "
+        "<strong>Prescription</strong> heading in the generated PDF and Word document, "
+        "followed by the AI-generated domain-specific content as usual."
+        "</p>",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="card" style="margin-bottom:12px;">'
+        '<div class="card-label">Example</div>'
+        '<div class="card-text" style="color:#444;font-style:italic;">'
+        '"As per our discussion, you completed B.Com and have two years of experience in accounts. '
+        'You cannot directly become a Data Analyst at this stage, but this programme will bridge that gap '
+        'and help you transition into a data-driven role with the right skills and projects."'
+        "</div></div>",
+        unsafe_allow_html=True
+    )
+
+    consultation_input = st.text_area(
+        "Consultation Note *",
+        value=st.session_state.get("consultation_note", ""),
+        height=160,
+        placeholder=(
+            "e.g. As per our discussion, you completed B.Com and have two years of experience in accounts. "
+            "You cannot directly become a Data Analyst at this stage, but this programme will bridge that gap "
+            "and help you transition into a data-driven role with the right skills and projects."
+        ),
+        key="consultation_note_input"
+    )
+
+    col_save, col_clear, _ = st.columns([2, 2, 5])
+    with col_save:
+        if st.button("💾 Save Note", type="primary", key="save_consult_note"):
+            note_val = consultation_input.strip()
+            if note_val:
+                # Capitalise first letter, ensure ends with period
+                note_val = note_val[0].upper() + note_val[1:]
+                if note_val[-1] not in ".!?":
+                    note_val += "."
+            st.session_state["consultation_note"] = note_val
+            if note_val:
+                st.success("✅ Consultation note saved. Go to the Application tab and generate the prescription — your note will appear under the Prescription heading.")
+            else:
+                st.info("ℹ️ Note cleared. The Prescription section will use the AI-generated intro line only.")
+
+    with col_clear:
+        if st.button("🗑️ Clear Note", key="clear_consult_note"):
+            st.session_state["consultation_note"] = ""
+            st.info("ℹ️ Consultation note cleared.")
+
+    # Show current saved note
+    saved_note = st.session_state.get("consultation_note", "")
+    if saved_note:
+        st.markdown("---")
+        st.markdown("**Currently saved note (will appear in next generated PDF):**")
+        st.markdown(
+            f'<div class="card"><div class="card-text">{saved_note}</div></div>',
+            unsafe_allow_html=True
+        )
