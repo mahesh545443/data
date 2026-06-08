@@ -33,6 +33,41 @@ GMAIL_USER = os.getenv("GMAIL_USER", "")
 GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "")
 
 # ==========================================
+# RESEND EMAIL CONFIG
+# ==========================================
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+# "From" must be on a domain verified in your Resend account.
+RESEND_FROM = os.getenv("RESEND_FROM", "Analytics Avenue <supportteam@analyticsavenue.in>")
+RESEND_API_URL = "https://api.resend.com/emails"
+
+# Rupee symbol kept as an escape (never paste the glyph into source -> avoids encoding errors on Render)
+RUPEE = "\u20b9"
+
+# Support / contact details shown in the email signature (fixed)
+SUPPORT_EMAIL   = "supportteam@analyticsavenue.in"
+WHATSAPP_NUMBER = "+91 9677591587"
+WEBSITE_URL     = "https://analyticsavenue.in"
+PAYMENT_LINK    = "https://rzp.io/rzp/feelink"
+UNSUBSCRIBE_EMAIL = "dataconsultants+unsubscribe@analyticsavenue.in"
+
+# ==========================================
+# PROGRAM FEE TIERS  (dropdown options)
+# Add more tiers here — each just needs total / onboarding / remaining.
+# ==========================================
+PROGRAM_TIERS = {
+    "Standard \u2013 Total \u20b925,000 (\u20b920,000 + \u20b95,000)": {
+        "total": 25000, "onboarding": 20000, "remaining": 5000
+    },
+}
+CUSTOM_TIER_LABEL = "Custom (enter amounts)"
+
+# ==========================================
+# DATA CONSULTANTS  (dropdown options — name varies per sender)
+# ==========================================
+CONSULTANTS = ["VETRISELVAN G"]
+CUSTOM_CONSULTANT_LABEL = "Other (type name)"
+
+# ==========================================
 # SPACING & MARGINS
 # ==========================================
 SPACING = {
@@ -1075,6 +1110,189 @@ def create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, ou
 # ==========================================
 # SEND MAIL FUNCTION
 # ==========================================
+# ==========================================
+# EMAIL BODY BUILDER + RESEND SENDER
+# ==========================================
+def format_inr(n):
+    """Format an integer in Indian grouping, e.g. 1234567 -> 12,34,567 ; 25000 -> 25,000"""
+    try:
+        n = int(round(float(n)))
+    except (TypeError, ValueError):
+        return str(n)
+    sign = "-" if n < 0 else ""
+    s = str(abs(n))
+    if len(s) <= 3:
+        return sign + s
+    last3 = s[-3:]
+    rest = s[:-3]
+    parts = []
+    while len(rest) > 2:
+        parts.insert(0, rest[-2:])
+        rest = rest[:-2]
+    if rest:
+        parts.insert(0, rest)
+    return sign + ",".join(parts) + "," + last3
+
+
+def build_prescription_email_body(candidate_name, total, onboarding, remaining, consultant_name):
+    """Build the plain-text email body exactly matching the approved template."""
+    name = (candidate_name or "Candidate").strip()
+    consultant = (consultant_name or "Data Consultant").strip()
+    body = (
+        f"\u201cArise, awake, and stop not till the goal is reached.\u201d\n"
+        f"\u2014 Swami Vivekananda\n\n"
+        f"Dear {name},\n\n"
+        f"Greetings from our team!\n\n"
+        f"Thank you for attending the consultation session. It was great interacting with you and "
+        f"understanding your interest in building a successful career in Data Science, Data Engineering, "
+        f"and Generative AI.\n\n"
+        f"Based on the discussion with our Data Scientist team, we have prepared a structured learning "
+        f"and internship journey specially designed to help you gain practical industry exposure and "
+        f"real-time experience.\n\n"
+        f"Program Details:\n"
+        f"\u2022 Total Program Cost: {RUPEE}{format_inr(total)}\n"
+        f"\u2022 Initial Onboarding Payment: {RUPEE}{format_inr(onboarding)}\n"
+        f"\u2022 Remaining Amount: {RUPEE}{format_inr(remaining)} (payable during the internship phase)\n\n"
+        f"Payment Link:\n"
+        f"{PAYMENT_LINK}\n\n"
+        f"Program Journey:\n\n"
+        f"1. Complete the payment process using the shared payment link.\n"
+        f"2. Attend the onboarding session where learning materials and guidance will be provided.\n"
+        f"3. Begin your learning journey through structured video modules and mentor guidance.\n"
+        f"4. Get access to live classes and practical technology training.\n"
+        f"5. Once ready with the required technologies, you will be invited for an offline internship "
+        f"at our Chennai office.\n"
+        f"6. Upon successful completion, you will receive:\n"
+        f"   \u2022 Internship Certificate\n"
+        f"   \u2022 Course Completion Certificate\n\n"
+        f"We are committed to providing you with hands-on practical exposure and industry-oriented "
+        f"learning that can help you confidently move toward your professional goals.\n\n"
+        f"Please find the attached Prescription.\n\n"
+        f"\u201cTake up one idea. Make that one idea your life \u2014 think of it, dream of it, live on that idea.\u201d\n"
+        f"\u2014 Swami Vivekananda\n\n"
+        f"I will personally connect with you tomorrow to clarify all your questions and guide you "
+        f"through the next steps.\n\n"
+        f"Wishing you great success in your learning journey ahead!\n\n"
+        f"--\n"
+        f"Best Regards,\n"
+        f"{consultant} - Data Consultant\n"
+        f"Analytics Avenue\n"
+        f"(Empower your business with data-driven insights)\n"
+        f"Email Support: {SUPPORT_EMAIL}\n"
+        f"WhatsApp Support: {WHATSAPP_NUMBER}\n"
+        f"Website: {WEBSITE_URL}\n\n"
+        f"--\n"
+        f"To unsubscribe from this group, send email to {UNSUBSCRIBE_EMAIL}"
+    )
+    return body
+
+
+def _esc(s):
+    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _linkify(line_html, raw_line):
+    """Turn URLs and email addresses in a line into clickable links."""
+    import re
+    # URLs
+    def url_repl(m):
+        u = m.group(0)
+        return f'<a href="{u}" style="color:#1155cc;text-decoration:underline;">{u}</a>'
+    line_html = re.sub(r'https?://[^\s<>"]+', url_repl, line_html)
+    # emails (skip ones already inside an anchor)
+    def mail_repl(m):
+        e = m.group(0)
+        return f'<a href="mailto:{e}" style="color:#1155cc;text-decoration:underline;">{e}</a>'
+    line_html = re.sub(r'(?<!["/>])\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b', mail_repl, line_html)
+    return line_html
+
+
+def text_to_html_email(text):
+    """Convert the (possibly edited) plain-text body into a neat HTML email.
+    Reflects any manual edits made in the text area — text remains the source of truth."""
+    lines = text.split("\n")
+    html_parts = []
+    for raw in lines:
+        stripped = raw.strip()
+        if stripped == "":
+            html_parts.append('<div style="height:12px;"></div>')
+            continue
+        esc = _esc(raw)
+        esc = _linkify(esc, raw)
+        # leading spaces -> non-breaking for indentation (e.g. sub-bullets)
+        leading = len(raw) - len(raw.lstrip(" "))
+        if leading:
+            esc = ("&nbsp;" * leading) + esc.lstrip(" ")
+        # Vivekananda quotes (curly quotes) and attribution -> bold + centered
+        is_quote = stripped.startswith("\u201c") and stripped.endswith("\u201d")
+        is_attrib = stripped.startswith("\u2014 Swami") or stripped.startswith("- Swami")
+        if is_quote or is_attrib:
+            html_parts.append(
+                f'<div style="text-align:center;font-weight:700;color:#111;">{esc}</div>'
+            )
+        else:
+            html_parts.append(f'<div>{esc}</div>')
+    inner = "\n".join(html_parts)
+    return (
+        '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;'
+        'line-height:1.6;color:#222;max-width:760px;">'
+        f'{inner}'
+        '</div>'
+    )
+
+
+def send_mail_via_resend(to_email, cc_emails, subject, text_body, html_body, pdf_path, candidate_name):
+    """Send the prescription email via the Resend API with the PDF attached."""
+    if not RESEND_API_KEY:
+        return False, "RESEND_API_KEY not configured. Add it to your environment / Streamlit secrets."
+    if pdf_path and not os.path.exists(pdf_path):
+        return False, f"PDF file not found at path: {pdf_path}"
+
+    try:
+        import base64
+        payload = {
+            "from": RESEND_FROM,
+            "to": [to_email],
+            "subject": subject,
+            "html": html_body,
+            "text": text_body,
+            "reply_to": SUPPORT_EMAIL,
+        }
+        if cc_emails:
+            payload["cc"] = cc_emails
+
+        if pdf_path:
+            with open(pdf_path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("utf-8")
+            payload["attachments"] = [{
+                "filename": os.path.basename(pdf_path),
+                "content": encoded,
+            }]
+
+        resp = requests.post(
+            RESEND_API_URL,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+
+        if resp.status_code in (200, 201):
+            return True, None
+        # surface Resend's error message
+        try:
+            err = resp.json()
+            msg = err.get("message") or err.get("error") or resp.text
+        except Exception:
+            msg = resp.text
+        return False, f"Resend API error ({resp.status_code}): {msg}"
+
+    except Exception as e:
+        return False, str(e)
+
+
 def send_mail_with_pdf(to_email, cc_emails, subject, body, pdf_path, candidate_name):
     if not GMAIL_USER or not GMAIL_PASSWORD:
         return False, "Gmail credentials not configured in Streamlit secrets (GMAIL_USER, GMAIL_PASSWORD)"
@@ -1235,6 +1453,10 @@ with tab2:
         "mail_status":       "",   # "" | "sending" | "sent" | "error"
         "mail_msg":          "",
         "consultation_note": "",
+        "body_composed":     False,
+        "tier_total":        25000,
+        "tier_onboarding":   20000,
+        "tier_remaining":    5000,
     }.items():
         if _k not in st.session_state:
             st.session_state[_k] = _v
@@ -1304,28 +1526,9 @@ with tab2:
                     pdf_ok,  pdf_err  = create_final_pdf(name, status, ai_content, table_rows, domain_rowspan_map, pdf_path, program, technologies, st.session_state.get("consultation_note", ""))
                     docx_ok, docx_err = create_word_doc(name, status, ai_content, table_rows, domain_rowspan_map, docx_path, program, technologies, st.session_state.get("consultation_note", ""))
 
-                # Build default mail body
-                default_body = (
-                    f"Dear {name},\n\n"
-                    f"Thank you for your recent consultation with Analytics Avenue & Advanced Analytics.\n\n"
-                    f"As discussed, please find attached your personalised Career Prescription prepared by "
-                    f"our Senior Data Scientist Mr. Subramani. This document outlines your tailored roadmap, "
-                    f"key outcomes, and domain-specific career opportunities in "
-                    f"{ai_content.get('domains_title', 'Data Analytics')}.\n\n"
-                    f"Your prescription covers:\n"
-                    f"  \u2022 Customised career roadmap across {ai_content.get('domains_title', '')}\n"
-                    f"  \u2022 Key technical skills: SQL, Python, Statistics, Power BI, Machine Learning, Gen AI\n"
-                    f"  \u2022 Industry-relevant projects and placement support\n\n"
-                    f"To take the next step, please register and pay the initial \u20b95,000 to block your seat:\n"
-                    f"Payment Link: https://pages.razorpay.com/OpenAnalyticsAvenue\n"
-                    f"UPI: aard@uco\n\n"
-                    f"Feel free to reach out for any queries.\n\n"
-                    f"Warm regards,\n"
-                    f"Data Consultant\n"
-                    f"Analytics Avenue & Advanced Analytics\n"
-                    f"Ph / WhatsApp: 9677298268\n"
-                    f"Email: supportteam@analyticsavenue.in"
-                )
+                # Mail body is now composed dynamically in the Send section
+                # (after picking program tier + consultant). Reset the flag here.
+                default_body = ""
 
                 # Save everything to session_state
                 st.session_state["generated"]    = True
@@ -1345,10 +1548,11 @@ with tab2:
                 # Reset mail fields for new prescription
                 st.session_state["mail_to"]      = ""
                 st.session_state["mail_cc"]      = ""
-                st.session_state["mail_subject"] = "Your Career Prescription \u2013 Analytics Avenue & Advanced Analytics"
+                st.session_state["mail_subject"] = "Your Learning & Internship Journey \u2013 Analytics Avenue"
                 st.session_state["mail_body"]    = default_body
                 st.session_state["mail_status"]  = ""
                 st.session_state["mail_msg"]     = ""
+                st.session_state["body_composed"] = False
 
     # ════════════════════════════════
     # RESULTS SECTION
@@ -1394,66 +1598,143 @@ with tab2:
                 st.error(f"Word Error: {st.session_state['docx_err']}")
 
         # ════════════════════════════════
-        # SEND MAIL SECTION
+        # SEND MAIL SECTION  (dropdowns → compose → review → send via Resend)
         # ════════════════════════════════
         st.markdown("---")
         st.subheader("📧 Send Prescription by Email")
 
+        # ── STEP 1: choose the dynamic parts (shown BEFORE the body) ──
+        st.markdown("##### Step 1 — Email Options")
         st.markdown('<div class="mail-box">', unsafe_allow_html=True)
 
-        mc1, mc2 = st.columns(2, gap="large")
-        with mc1:
-            st.text_input("To *", placeholder="candidate@email.com", key="mail_to")
-        with mc2:
-            st.text_input(
-                "CC (comma-separated)",
-                placeholder="cc1@email.com, cc2@email.com",
-                key="mail_cc"
+        opt1, opt2 = st.columns(2, gap="large")
+
+        with opt1:
+            tier_choice = st.selectbox(
+                "Program Details (fee tier) *",
+                list(PROGRAM_TIERS.keys()) + [CUSTOM_TIER_LABEL],
+                key="tier_choice"
+            )
+        with opt2:
+            consultant_choice = st.selectbox(
+                "Data Consultant Name *",
+                CONSULTANTS + [CUSTOM_CONSULTANT_LABEL],
+                key="consultant_choice"
             )
 
-        st.text_input("Subject", key="mail_subject")
-        st.text_area("Email Body", height=280, key="mail_body")
+        # Custom amounts (only when "Custom" selected)
+        if tier_choice == CUSTOM_TIER_LABEL:
+            a1, a2, a3 = st.columns(3, gap="large")
+            with a1:
+                total_amt = st.number_input(f"Total Program Cost ({RUPEE})", min_value=0, step=500,
+                                            value=int(st.session_state["tier_total"]), key="cust_total")
+            with a2:
+                onboarding_amt = st.number_input(f"Initial Onboarding ({RUPEE})", min_value=0, step=500,
+                                                 value=int(st.session_state["tier_onboarding"]), key="cust_onboarding")
+            with a3:
+                remaining_amt = st.number_input(f"Remaining Amount ({RUPEE})", min_value=0, step=500,
+                                                value=int(st.session_state["tier_remaining"]), key="cust_remaining")
+        else:
+            t = PROGRAM_TIERS[tier_choice]
+            total_amt, onboarding_amt, remaining_amt = t["total"], t["onboarding"], t["remaining"]
+            st.caption(
+                f"Total: {RUPEE}{format_inr(total_amt)}  |  "
+                f"Onboarding: {RUPEE}{format_inr(onboarding_amt)}  |  "
+                f"Remaining: {RUPEE}{format_inr(remaining_amt)}"
+            )
+
+        # Custom consultant name (only when "Other" selected)
+        if consultant_choice == CUSTOM_CONSULTANT_LABEL:
+            consultant_name = st.text_input("Enter Consultant Name *", placeholder="e.g. RAVI KUMAR",
+                                            key="cust_consultant").strip().upper()
+        else:
+            consultant_name = consultant_choice
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # ── Status banner (persists across reruns) ──
-        if st.session_state["mail_status"] == "sent":
-            st.success(f"✅ {st.session_state['mail_msg']}")
-        elif st.session_state["mail_status"] == "error":
-            st.error(f"❌ {st.session_state['mail_msg']}")
-            st.info("💡 Use a Gmail **App Password** — not your regular Gmail password. "
-                    "Generate one at: myaccount.google.com/apppasswords  |  "
-                    "Then add GMAIL_USER and GMAIL_PASSWORD to Streamlit secrets.")
-
-        # ── Send button — outside any form so it doesn't clear fields ──
-        if st.button("📤 Send Mail", type="primary", key="send_mail_btn"):
-            _to = st.session_state["mail_to"].strip()
-            if not _to:
-                st.session_state["mail_status"] = "error"
-                st.session_state["mail_msg"]    = "Please enter a To email address."
-            else:
-                _cc_raw  = st.session_state["mail_cc"]
-                _cc_list = [e.strip() for e in _cc_raw.replace(',', '\n').split('\n') if e.strip()] if _cc_raw.strip() else []
-
-                st.session_state["mail_status"] = "sending"
-                with st.spinner("📨 Sending email..."):
-                    mail_ok, mail_err = send_mail_with_pdf(
-                        to_email    = _to,
-                        cc_emails   = _cc_list,
-                        subject     = st.session_state["mail_subject"],
-                        body        = st.session_state["mail_body"],
-                        pdf_path    = _pdf_path,
-                        candidate_name = _cname
-                    )
-
-                if mail_ok:
-                    disp = _to + (f"  |  CC: {', '.join(_cc_list)}" if _cc_list else "")
-                    st.session_state["mail_status"] = "sent"
-                    st.session_state["mail_msg"]    = f"Email sent successfully to {disp}"
-                else:
-                    st.session_state["mail_status"] = "error"
-                    st.session_state["mail_msg"]    = mail_err or "Unknown error"
+        # ── Compose button → builds the full body from the choices above ──
+        if st.button("📝 Compose Email Body", type="secondary", key="compose_body_btn"):
+            st.session_state["tier_total"]       = int(total_amt)
+            st.session_state["tier_onboarding"]  = int(onboarding_amt)
+            st.session_state["tier_remaining"]   = int(remaining_amt)
+            st.session_state["mail_body"] = build_prescription_email_body(
+                candidate_name  = _cname,
+                total           = total_amt,
+                onboarding      = onboarding_amt,
+                remaining       = remaining_amt,
+                consultant_name = consultant_name,
+            )
+            st.session_state["body_composed"] = True
+            st.session_state["mail_status"]   = ""
+            st.session_state["mail_msg"]      = ""
             st.rerun()
+
+        # ── STEP 2: review the composed body, then send ──
+        if st.session_state.get("body_composed"):
+            st.markdown("##### Step 2 — Review & Send")
+            st.markdown('<div class="mail-box">', unsafe_allow_html=True)
+
+            mc1, mc2 = st.columns(2, gap="large")
+            with mc1:
+                st.text_input("To *", placeholder="candidate@email.com", key="mail_to")
+            with mc2:
+                st.text_input(
+                    "CC (comma-separated)",
+                    placeholder="cc1@email.com, cc2@email.com",
+                    key="mail_cc"
+                )
+
+            st.text_input("Subject", key="mail_subject")
+            st.text_area("Email Body (edit if needed)", height=420, key="mail_body")
+
+            with st.expander("👀 Preview formatted email (how it will look)"):
+                st.markdown(text_to_html_email(st.session_state["mail_body"]), unsafe_allow_html=True)
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # ── Status banner (persists across reruns) ──
+            if st.session_state["mail_status"] == "sent":
+                st.success(f"✅ {st.session_state['mail_msg']}")
+            elif st.session_state["mail_status"] == "error":
+                st.error(f"❌ {st.session_state['mail_msg']}")
+                st.info("💡 Make sure **RESEND_API_KEY** is set and **RESEND_FROM** uses a "
+                        "domain verified in your Resend account.")
+
+            # ── Send button — outside any form so it doesn't clear fields ──
+            if st.button("📤 Send Mail", type="primary", key="send_mail_btn"):
+                _to = st.session_state["mail_to"].strip()
+                if not _to:
+                    st.session_state["mail_status"] = "error"
+                    st.session_state["mail_msg"]    = "Please enter a To email address."
+                else:
+                    _cc_raw  = st.session_state["mail_cc"]
+                    _cc_list = [e.strip() for e in _cc_raw.replace(',', '\n').split('\n') if e.strip()] if _cc_raw.strip() else []
+
+                    _text_body = st.session_state["mail_body"]
+                    _html_body = text_to_html_email(_text_body)
+
+                    st.session_state["mail_status"] = "sending"
+                    with st.spinner("📨 Sending email via Resend..."):
+                        mail_ok, mail_err = send_mail_via_resend(
+                            to_email       = _to,
+                            cc_emails      = _cc_list,
+                            subject        = st.session_state["mail_subject"],
+                            text_body      = _text_body,
+                            html_body      = _html_body,
+                            pdf_path       = _pdf_path,
+                            candidate_name = _cname
+                        )
+
+                    if mail_ok:
+                        disp = _to + (f"  |  CC: {', '.join(_cc_list)}" if _cc_list else "")
+                        st.session_state["mail_status"] = "sent"
+                        st.session_state["mail_msg"]    = f"Email sent successfully to {disp}"
+                    else:
+                        st.session_state["mail_status"] = "error"
+                        st.session_state["mail_msg"]    = mail_err or "Unknown error"
+                st.rerun()
+        else:
+            st.info("👆 Choose the fee tier and consultant, then click **Compose Email Body** to build the message.")
 
         with st.expander("📋 AI Content"):
             st.json(_ai)
