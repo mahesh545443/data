@@ -37,7 +37,7 @@ GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "")
 # ==========================================
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 # "From" must be on a domain verified in your Resend account.
-RESEND_FROM = os.getenv("RESEND_FROM", "Analytics Avenue <supportteam@analyticsavenue.in>")
+RESEND_FROM = os.getenv("RESEND_FROM", "Analytics Avenue <rnd@analyticsavenue.in>")
 RESEND_API_URL = "https://api.resend.com/emails"
 
 # Rupee symbol kept as an escape (never paste the glyph into source -> avoids encoding errors on Render)
