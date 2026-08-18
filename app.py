@@ -247,7 +247,7 @@ Match the style, grammar, and capitalisation of the example above. Return ONLY v
         client = Groq(api_key=GROQ_API_KEY)
         completion = client.chat.completions.create(
             messages=[{"role": "user", "content": PROMPT}],
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             temperature=0.3,
             response_format={"type": "json_object"}
         )
